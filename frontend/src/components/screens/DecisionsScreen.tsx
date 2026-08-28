@@ -1,12 +1,12 @@
 import React from 'react';
 import { ArrowLeft, Clock, RefreshCw } from 'lucide-react';
-import { DecisionUpdateData } from '../../types';
+import { DecisionUpdateViewModel } from '../../types';
 import { DecisionDiff } from '../diff/DecisionDiff';
 import { DecisionExplanation } from '../explanation/DecisionExplanation';
 import { CashForecast } from '../charts/CashForecast';
 
 interface DecisionsScreenProps {
-  decisionData: DecisionUpdateData;
+  decisionData: DecisionUpdateViewModel;
   onBackToOverview: () => void;
 }
 
@@ -104,7 +104,7 @@ export const DecisionsScreen: React.FC<DecisionsScreenProps> = ({
                     className={`badge ${
                       row.actionAssigned === 'BANK_FINANCE'
                         ? 'badge-dark'
-                        : row.actionAssigned === 'PAY_CASH'
+                        : row.actionAssigned === 'PAY_NOW' || row.actionAssigned === 'PAY_MATURITY'
                         ? 'badge-neutral'
                         : 'badge-safe'
                     }`}

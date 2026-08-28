@@ -1,10 +1,10 @@
 import React from 'react';
 import { History as HistoryIcon, ArrowRight, ShieldCheck } from 'lucide-react';
-import { HistoryItem } from '../../types';
+import { HistoryViewModel } from '../../types';
 
 interface HistoryScreenProps {
-  historyItems: HistoryItem[];
-  onSelectHistoryItem?: (item: HistoryItem) => void;
+  historyItems: HistoryViewModel[];
+  onSelectHistoryItem?: (item: HistoryViewModel) => void;
 }
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({

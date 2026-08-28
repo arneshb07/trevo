@@ -1,12 +1,12 @@
 import React from 'react';
 import { ArrowDown, ArrowRightLeft } from 'lucide-react';
-import { InvoiceAction } from '../../types';
+import { ActionType } from '../../types';
 
 interface DecisionDiffProps {
   previousTarget?: string;
-  previousAction?: InvoiceAction | string;
+  previousAction?: ActionType | string;
   newTarget?: string;
-  newAction?: InvoiceAction | string;
+  newAction?: ActionType | string;
   costDelta?: string;
   costDeltaLabel?: string;
 }

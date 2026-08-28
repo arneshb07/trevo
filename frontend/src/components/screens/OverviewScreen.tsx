@@ -10,11 +10,11 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { SummaryMetrics, Invoice } from '../../types';
+import { SummaryMetricsViewModel, InvoiceViewModel } from '../../types';
 
 interface OverviewScreenProps {
-  metrics: SummaryMetrics;
-  invoices: Invoice[];
+  metrics: SummaryMetricsViewModel;
+  invoices: InvoiceViewModel[];
   onRunSimulation: (day: number) => void;
 }
 
@@ -71,7 +71,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           <div>
             <span className="badge badge-safe">
               <span className="badge-dot"></span>
-              SAFE
+              {metrics.riskStatus}
             </span>
           </div>
         </div>
