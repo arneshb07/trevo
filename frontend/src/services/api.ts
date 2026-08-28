@@ -1,11 +1,10 @@
 import { 
   BusinessState, 
-  Decision, 
   FinancialEvent, 
   CounterfactualResponse,
   ApiErrorResponse,
-  VoiceExplanationResponse
-  ,DecisionEngineResponse,
+  VoiceExplanationResponse,
+  DecisionEngineResponse,
   EventEngineResponse,
   HistoryApiResponse
 } from '../types';
@@ -29,10 +28,10 @@ const DEFAULT_TIMEOUT_MS = 10000;
 class ApiService {
   private getBaseUrl(): string {
     const rawUrl = import.meta.env.VITE_API_BASE_URL;
-    if (!rawUrl || typeof rawUrl !== 'string') {
-      return '';
+    if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim()) {
+      return rawUrl.trim().replace(/\/+$/, '');
     }
-    return rawUrl.replace(/\/+$/, '');
+    return 'http://localhost:8000';
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -42,6 +41,10 @@ class ApiService {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+    if (import.meta.env.DEV) {
+      console.debug(`[TREVO API] REQUEST: ${options.method || 'GET'} ${url}`);
+    }
 
     try {
       const response = await fetch(url, {
@@ -55,6 +58,10 @@ class ApiService {
       });
 
       clearTimeout(timeoutId);
+
+      if (import.meta.env.DEV) {
+        console.debug(`[TREVO API] RESPONSE: ${response.status} ${url}`);
+      }
 
       if (!response.ok) {
         let errorDetail = '';
@@ -120,8 +127,17 @@ class ApiService {
   /**
    * Force re-optimization of the current state (POST /optimize)
    */
-  async postOptimize(): Promise<Decision[]> {
-    return this.request<Decision[]>('/optimize', {
+  async postOptimize(): Promise<DecisionEngineResponse> {
+    return this.request<DecisionEngineResponse>('/optimize', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Reset database state to baseline (POST /reset)
+   */
+  async reset(): Promise<{ status: string; message: string; state: BusinessState; decisions: DecisionEngineResponse }> {
+    return this.request<{ status: string; message: string; state: BusinessState; decisions: DecisionEngineResponse }>('/reset', {
       method: 'POST',
     });
   }
@@ -140,7 +156,9 @@ class ApiService {
     return this.request<CounterfactualResponse>(`/decision/${id}/counterfactual`);
   }
 
-  /** Request optional narrated decision context from the backend. */
+  /**
+   * Request narrated decision context from the backend (POST /explain/voice)
+   */
   async explainVoice(invoiceId: string): Promise<VoiceExplanationResponse> {
     return this.request<VoiceExplanationResponse>('/explain/voice', {
       method: 'POST',

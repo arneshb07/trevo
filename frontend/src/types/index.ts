@@ -156,6 +156,13 @@ export interface HistoryApiResponse {
   history: Array<{
     id: number;
     event_id: number;
+    event_type?: string;
+    payload?: {
+      type?: string;
+      invoice_id?: string;
+      new_day?: number;
+      [key: string]: unknown;
+    } | null;
     previous_plan: DecisionEngineResponse;
     new_plan: DecisionEngineResponse;
     created_at: string;

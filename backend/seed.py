@@ -1,5 +1,4 @@
-from database import get_connection, init_db
-
+from backend.database import get_connection, init_db
 
 def seed_database():
     init_db()
@@ -33,8 +32,8 @@ def seed_database():
 
         cursor.execute("""
             INSERT INTO obligations
-            (amount, day)
-            VALUES (400000, 6)
+            (id, amount, day)
+            VALUES ('PAYROLL', 400000, 6)
         """)
 
         # Payables

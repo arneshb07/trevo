@@ -1,8 +1,10 @@
+import os
 import sqlite3
 from pathlib import Path
 
-
-DATABASE_PATH = Path(__file__).resolve().parent.parent / "data" / "trevo.db"
+DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent.parent / "data" / "trevo.db"
+ENV_DATABASE_PATH = os.getenv("DATABASE_PATH")
+DATABASE_PATH = Path(ENV_DATABASE_PATH) if ENV_DATABASE_PATH else DEFAULT_DATABASE_PATH
 
 
 def get_connection():

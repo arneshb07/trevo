@@ -5,14 +5,8 @@ import {
   DecisionPlan,
   HistoryEntry,
   DecisionEngineResponse,
+  CounterfactualResponse,
 } from './types';
-import {
-  baselineBusinessState,
-  baselineDecisionPlan,
-  shockBusinessState,
-  shockDecisionPlan,
-  mockHistoryEntries,
-} from './mock/index';
 import { api, ApiError } from './services/api';
 import {
   getSummaryMetricsViewModel,
@@ -31,40 +25,54 @@ import { DecisionsScreen } from './components/screens/DecisionsScreen';
 import { HistoryScreen } from './components/screens/HistoryScreen';
 
 export function App() {
-  // Canonical State from origin/feat/frontend-core
-  const [businessState, setBusinessState] = useState<BusinessState>(baselineBusinessState);
+  // Canonical State from Backend API
+  const [businessState, setBusinessState] = useState<BusinessState | null>(null);
   const [engineResponse, setEngineResponse] = useState<DecisionEngineResponse | null>(null);
-  const [decisionPlan, setDecisionPlan] = useState<DecisionPlan>(baselineDecisionPlan);
-  const [comparisonPlan, setComparisonPlan] = useState<DecisionPlan>(baselineDecisionPlan);
-  const [history, setHistory] = useState<HistoryEntry[]>(mockHistoryEntries);
-  const [mode, setMode] = useState<'live' | 'demo'>('demo');
-  const [hasDecisionChange, setHasDecisionChange] = useState(false);
-  const [isSimulationLoading, setIsSimulationLoading] = useState(false);
-  const [simulationError, setSimulationError] = useState<string>();
-  const [isVoiceLoading, setIsVoiceLoading] = useState(false);
-  const [voiceError, setVoiceError] = useState<string>();
-  const [voiceText, setVoiceText] = useState<string>();
-  const [voiceExplanation, setVoiceExplanation] = useState<string>();
-  const [counterfactualData, setCounterfactualData] = useState<import('./types').CounterfactualResponse | null>(null);
-  const [isCounterfactualLoading, setIsCounterfactualLoading] = useState(false);
-  const [counterfactualError, setCounterfactualError] = useState<string>();
+  const [decisionPlan, setDecisionPlan] = useState<DecisionPlan | null>(null);
+  const [comparisonPlan, setComparisonPlan] = useState<DecisionPlan | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  
+  // Connection & Loading States
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
+  const [initialError, setInitialError] = useState<string | null>(null);
 
-  // UI Navigation State
+  // Interaction States
+  const [hasDecisionChange, setHasDecisionChange] = useState<boolean>(false);
+  const [isSimulationLoading, setIsSimulationLoading] = useState<boolean>(false);
+  const [simulationError, setSimulationError] = useState<string | undefined>(undefined);
+  const [isVoiceLoading, setIsVoiceLoading] = useState<boolean>(false);
+  const [voiceError, setVoiceError] = useState<string | undefined>(undefined);
+  const [voiceText, setVoiceText] = useState<string | undefined>(undefined);
+  const [voiceExplanation, setVoiceExplanation] = useState<string | undefined>(undefined);
+  const [counterfactualData, setCounterfactualData] = useState<CounterfactualResponse | null>(null);
+  const [isCounterfactualLoading, setIsCounterfactualLoading] = useState<boolean>(false);
+  const [counterfactualError, setCounterfactualError] = useState<string | undefined>(undefined);
+
+  // UI Navigation Tab State
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
 
-  // Load initial backend data or fall back to canonical mock baseline
+  // Load initial backend data from FastAPI
   const loadInitialData = useCallback(async () => {
+    setInitialLoading(true);
+    setConnectionStatus('connecting');
+    setInitialError(null);
+
     try {
       const state = await api.getState();
       const decisions = await api.getDecisions();
 
       if (state && decisions && decisions.invoices) {
-        setBusinessState(normalizeBusinessState(state));
+        const normalizedState = normalizeBusinessState(state);
+        const parsedPlan = engineToDecisionPlan(decisions);
+
+        setBusinessState(normalizedState);
         setEngineResponse(decisions);
-        setDecisionPlan(engineToDecisionPlan(decisions));
-        setComparisonPlan(engineToDecisionPlan(decisions));
-        setHasDecisionChange(Object.values(decisions.invoices).some((decision) => baselineDecisionPlan.decisions.find((baseline) => baseline.invoice_id === decision.payable_id)?.selected_action !== decision.selected_action));
-        setMode('live');
+        setDecisionPlan(parsedPlan);
+        setComparisonPlan(parsedPlan);
+        setHasDecisionChange(false);
+        setConnectionStatus('connected');
+        setInitialError(null);
 
         try {
           const remoteHistory = await api.getHistory();
@@ -72,15 +80,20 @@ export function App() {
             setHistory(historyApiToEntries(remoteHistory));
           }
         } catch {
-          // Graceful fallback for history
+          // History endpoint error handling
         }
+      } else {
+        throw new Error('Invalid or incomplete data payload received from backend.');
       }
-    } catch {
-      // Backend not running - use canonical mock baseline
-      setBusinessState(baselineBusinessState);
-      setDecisionPlan(baselineDecisionPlan);
-      setHistory(mockHistoryEntries);
-      setMode('demo');
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to connect to backend';
+      console.error('[TREVO API] Initial load failed:', msg);
+      setConnectionStatus('disconnected');
+      setInitialError(`Backend connection failed: ${msg}. Make sure the backend server is running.`);
+      setBusinessState(null);
+      setDecisionPlan(null);
+    } finally {
+      setInitialLoading(false);
     }
   }, []);
 
@@ -88,166 +101,187 @@ export function App() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Handle Event Simulation (Shock)
+  // Handle Event Simulation (Shock) -> Sends real POST /events to backend
   const handleRunSimulation = async (day: number, receivableId: string) => {
     setIsSimulationLoading(true);
     setSimulationError(undefined);
 
-    if (mode === 'live') {
-      try {
-        const response = await api.postEvent({
-          type: 'RECEIVABLE_DELAY',
-          invoice_id: receivableId,
-          new_day: day,
-        });
+    try {
+      const targetId = receivableId || (businessState?.receivables[0]?.id) || 'AR-Y';
+      const response = await api.postEvent({
+        type: 'RECEIVABLE_DELAY',
+        invoice_id: targetId,
+        new_day: day,
+      });
 
-        if (!response.new_decisions) {
-          throw new Error('Event response did not include an updated plan.');
-        }
-
-        setEngineResponse(response.new_decisions);
-        setComparisonPlan(engineToDecisionPlan(response.previous_decisions));
-        setDecisionPlan(engineToDecisionPlan(response.new_decisions));
-        setHasDecisionChange(response.changes.length > 0);
-        setBusinessState(normalizeBusinessState(await api.getState()));
-
-        try {
-          const updatedHistory = await api.getHistory();
-          if (updatedHistory && Array.isArray(updatedHistory.history)) {
-            setHistory(historyApiToEntries(updatedHistory));
-          }
-        } catch {
-          // Keep current history
-        }
-
-      } catch (err: unknown) {
-        console.warn('Backend event failed:', err instanceof ApiError ? err.message : err);
-        setSimulationError('The event could not be applied. Current backend state is unchanged.');
-        setHasDecisionChange(false);
+      if (!response || !response.new_decisions) {
+        throw new Error('Event simulation response did not include updated decision plan.');
       }
-    } else {
-      // Demo Mode deterministic transition
-      setBusinessState(shockBusinessState);
-      setDecisionPlan(shockDecisionPlan);
-      setComparisonPlan(baselineDecisionPlan);
-      setHasDecisionChange(true);
-    }
 
-    setIsSimulationLoading(false);
-    setActiveTab('decisions');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+      setEngineResponse(response.new_decisions);
+      setComparisonPlan(engineToDecisionPlan(response.previous_decisions));
+      setDecisionPlan(engineToDecisionPlan(response.new_decisions));
+      setHasDecisionChange(Boolean(response.changes && response.changes.length > 0));
+
+      // Refresh real state from database
+      const updatedState = await api.getState();
+      setBusinessState(normalizeBusinessState(updatedState));
+
+      // Refresh history from database
+      try {
+        const updatedHistory = await api.getHistory();
+        if (updatedHistory && Array.isArray(updatedHistory.history)) {
+          setHistory(historyApiToEntries(updatedHistory));
+        }
+      } catch {
+        // Keep existing history if endpoint fails
+      }
+
+      setActiveTab('decisions');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Simulation failed';
+      console.error('[TREVO API] Simulation failed:', msg);
+      setSimulationError(`Simulation request failed: ${msg}`);
+      setHasDecisionChange(false);
+    } finally {
+      setIsSimulationLoading(false);
+    }
   };
 
-  // Handle Reset to Baseline (No confirmation dialog, immediate reset)
+  // Handle Reset to Baseline (POST /reset or re-seed)
   const handleResetToBaseline = async () => {
     setActiveTab('overview');
-
-    if (mode === 'live') {
-      try {
-        await loadInitialData();
-        setHasDecisionChange(false);
-      } catch {
-        setBusinessState(baselineBusinessState);
-        setDecisionPlan(baselineDecisionPlan);
-      }
-    } else {
-      setBusinessState(baselineBusinessState);
-      setDecisionPlan(baselineDecisionPlan);
-      setComparisonPlan(baselineDecisionPlan);
-      setHasDecisionChange(false);
+    try {
+      await api.reset();
+    } catch {
+      // Fallback
     }
+    await loadInitialData();
   };
 
+  // Handle Voice / Text Explanation
   const handleExplainVoice = async () => {
     setIsVoiceLoading(true);
     setVoiceError(undefined);
     try {
-      const response = await api.explainVoice('INV-B');
+      const targetInvoiceId = decisionPlan?.decisions.find(
+        (d) => comparisonPlan?.decisions.find((cp) => cp.invoice_id === d.invoice_id)?.selected_action !== d.selected_action
+      )?.invoice_id || 'INV-B';
+      const response = await api.explainVoice(targetInvoiceId);
       setVoiceExplanation(response.text);
       if (response.audio) {
         setVoiceText(response.audio);
-      } else {
-        setVoiceError('Narration is unavailable. The text explanation remains available above.');
       }
-    } catch {
-      setVoiceError('Narration is unavailable. The text explanation remains available above.');
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Voice briefing unavailable.';
+      setVoiceError(msg);
     } finally {
       setIsVoiceLoading(false);
     }
   };
 
+  // Handle Counterfactual Parameter Sweep
   const handleLoadCounterfactual = async () => {
     setIsCounterfactualLoading(true);
     setCounterfactualError(undefined);
     try {
-      setCounterfactualData(await api.getCounterfactual('INV-B'));
-    } catch {
+      const targetInvoiceId = decisionPlan?.decisions.find(
+        (d) => comparisonPlan?.decisions.find((cp) => cp.invoice_id === d.invoice_id)?.selected_action !== d.selected_action
+      )?.invoice_id || 'INV-B';
+      const data = await api.getCounterfactual(targetInvoiceId);
+      setCounterfactualData(data);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Counterfactual sweep failed.';
       setCounterfactualData(null);
-      setCounterfactualError('Counterfactual sweep is unavailable from the current backend.');
+      setCounterfactualError(msg);
     } finally {
       setIsCounterfactualLoading(false);
     }
   };
 
-  // Compute ViewModels from Canonical State
-  const summaryMetricsVM = getSummaryMetricsViewModel(businessState, decisionPlan, engineResponse || undefined);
-  const invoiceVMs = getInvoiceViewModels(businessState, decisionPlan);
-  const decisionUpdateVM = getDecisionUpdateViewModel(
-    comparisonPlan,
-    decisionPlan,
-    businessState
-  );
-  if (engineResponse) {
-    decisionUpdateVM.forecastMilestones = engineToForecastMilestones(engineResponse);
-    decisionUpdateVM.liquidityBuffer = engineResponse.summary.buffer;
-  }
-  const historyVMs = getHistoryViewModels(history);
-
   return (
     <div className="app-container">
-      {/* Top Header with Clickable Logo (Immediate Baseline Reset) */}
+      {/* Top Header with Clickable Logo (Immediate Baseline Reset) and Connection Status */}
       <Header
         onResetToBaseline={handleResetToBaseline}
         showTitleGroup={activeTab === 'overview'}
         title="Working Capital"
         subtitle="Real-time overview of deployed capital and liquidity."
+        connectionStatus={connectionStatus}
       />
 
-      {/* Main View Area */}
+      {/* Main Content Area */}
       <main>
-        {activeTab === 'overview' && (
-          <OverviewScreen
-            metrics={summaryMetricsVM}
-            invoices={invoiceVMs}
-            businessState={businessState}
-            onRunSimulation={handleRunSimulation}
-            isSimulationLoading={isSimulationLoading}
-            simulationError={simulationError}
-          />
-        )}
+        {initialLoading ? (
+          <div className="liquid-card content-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div className="badge badge-safe" style={{ marginBottom: '16px' }}>
+              <span className="badge-dot" /> Connecting to TREVO Engine...
+            </div>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
+              Loading portfolio state and CP-SAT optimizer decisions.
+            </p>
+          </div>
+        ) : initialError || !businessState || !decisionPlan ? (
+          <div className="liquid-card content-card" style={{ textAlign: 'center', padding: '50px 20px', border: '1px solid var(--color-warning-border)' }}>
+            <div className="badge badge-warning" style={{ marginBottom: '16px' }}>
+              <span className="badge-dot" /> Backend Unavailable
+            </div>
+            <h3 style={{ color: 'var(--color-text-title)', marginBottom: '8px', fontSize: '1.2rem' }}>
+              Unable to reach TREVO Backend Server
+            </h3>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', maxWidth: '520px', margin: '0 auto 20px' }}>
+              {initialError || 'Please ensure the FastAPI backend is running on http://localhost:8000.'}
+            </p>
+            <button type="button" className="btn-primary" onClick={loadInitialData}>
+              Retry Connection
+            </button>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'overview' && (
+              <OverviewScreen
+                metrics={getSummaryMetricsViewModel(businessState, decisionPlan, engineResponse || undefined)}
+                invoices={getInvoiceViewModels(businessState, decisionPlan)}
+                businessState={businessState}
+                onRunSimulation={handleRunSimulation}
+                isSimulationLoading={isSimulationLoading}
+                simulationError={simulationError}
+              />
+            )}
 
-        {activeTab === 'decisions' && (
-          <DecisionsScreen
-            decisionData={decisionUpdateVM}
-            onBackToOverview={() => setActiveTab('overview')}
-            onExplainVoice={handleExplainVoice}
-            isVoiceLoading={isVoiceLoading}
-            voiceError={voiceError}
-            voiceText={voiceText}
-            voiceExplanation={voiceExplanation}
-            counterfactualData={counterfactualData}
-            isCounterfactualLoading={isCounterfactualLoading}
-            onLoadCounterfactual={handleLoadCounterfactual}
-            counterfactualError={counterfactualError}
-            hasDecisionChange={hasDecisionChange}
-          />
-        )}
+            {activeTab === 'decisions' && (
+              <DecisionsScreen
+                decisionData={{
+                  ...getDecisionUpdateViewModel(
+                    comparisonPlan || decisionPlan,
+                    decisionPlan,
+                    businessState
+                  ),
+                  forecastMilestones: engineResponse ? engineToForecastMilestones(engineResponse) : [],
+                  liquidityBuffer: engineResponse?.summary.buffer || businessState.buffer,
+                }}
+                onBackToOverview={() => setActiveTab('overview')}
+                onExplainVoice={handleExplainVoice}
+                isVoiceLoading={isVoiceLoading}
+                voiceError={voiceError}
+                voiceText={voiceText}
+                voiceExplanation={voiceExplanation}
+                counterfactualData={counterfactualData}
+                isCounterfactualLoading={isCounterfactualLoading}
+                onLoadCounterfactual={handleLoadCounterfactual}
+                counterfactualError={counterfactualError}
+                hasDecisionChange={hasDecisionChange}
+              />
+            )}
 
-        {activeTab === 'history' && (
-          <HistoryScreen
-            historyItems={historyVMs}
-            onSelectHistoryItem={() => setActiveTab('decisions')}
-          />
+            {activeTab === 'history' && (
+              <HistoryScreen
+                historyItems={getHistoryViewModels(history)}
+                onSelectHistoryItem={() => setActiveTab('decisions')}
+              />
+            )}
+          </>
         )}
       </main>
 

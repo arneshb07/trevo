@@ -170,6 +170,62 @@ input[type="range"] {
   margin-bottom: 28px;
 }
 
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-liquid-sm);
+  transition: all var(--transition-smooth);
+}
+
+.connection-badge.connected {
+  color: var(--color-safe-text);
+  background-color: var(--color-safe-bg);
+  border-color: rgba(180, 225, 195, 0.8);
+}
+
+.connection-badge.connected .connection-dot {
+  background-color: #1A633F;
+}
+
+.connection-badge.disconnected {
+  color: var(--color-warning-text);
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+}
+
+.connection-badge.disconnected .connection-dot {
+  background-color: #DC2626;
+}
+
+.connection-badge.connecting {
+  color: var(--color-text-secondary);
+  background-color: var(--color-neutral-badge);
+}
+
+.connection-badge.connecting .connection-dot {
+  background-color: #6B7280;
+}
+
+.connection-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
 .trevo-logo-btn {
   display: inline-flex;
   align-items: center;
@@ -1769,6 +1825,60 @@ input[type="range"] {
   }
 }
 
+
+/* Connection status badge */
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.connection-badge.connected {
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.connection-badge.connecting {
+  background: rgba(234, 179, 8, 0.1);
+  color: #a16207;
+  border-color: rgba(234, 179, 8, 0.25);
+}
+
+.connection-badge.disconnected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.connection-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.connection-badge.connected .connection-dot {
+  background-color: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.connection-badge.connecting .connection-dot {
+  background-color: #eab308;
+  animation: pulse 1.5s infinite;
+}
+
+.connection-badge.disconnected .connection-dot {
+  background-color: #ef4444;
+}
+
 /* Animations */
 @keyframes fadeInDown {
   from {
@@ -1780,3 +1890,4 @@ input[type="range"] {
     transform: translateY(0);
   }
 }
+

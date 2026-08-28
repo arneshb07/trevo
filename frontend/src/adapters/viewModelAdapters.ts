@@ -99,17 +99,28 @@ export function engineToForecastMilestones(response: DecisionEngineResponse): im
 }
 
 export function historyApiToEntries(response: HistoryApiResponse): HistoryEntry[] {
-  return response.history.map((entry) => ({
-    id: String(entry.id),
-    timestamp: entry.created_at,
-    event_type: 'REOPTIMIZATION',
-    description: `Event ${entry.event_id} recalculated the portfolio`,
-    total_cost: entry.new_plan.total_cost,
-    cost_delta: entry.new_plan.total_cost - entry.previous_plan.total_cost,
-    decisions: engineToDecisionPlan(entry.new_plan).decisions,
-    previous_plan: engineToDecisionPlan(entry.previous_plan),
-    new_plan: engineToDecisionPlan(entry.new_plan),
-  }));
+  return response.history.map((entry) => {
+    const prevPlan = engineToDecisionPlan(entry.previous_plan);
+    const newPlan = engineToDecisionPlan(entry.new_plan);
+    const eventType = entry.event_type || (entry.payload?.type as string) || 'REOPTIMIZATION';
+    
+    let description = `Event #${entry.event_id || entry.id} re-optimized portfolio`;
+    if (entry.payload?.invoice_id && entry.payload?.new_day) {
+      description = `Receivable ${entry.payload.invoice_id} delayed to Day ${entry.payload.new_day}`;
+    }
+
+    return {
+      id: String(entry.id),
+      timestamp: entry.created_at,
+      event_type: eventType,
+      description,
+      total_cost: entry.new_plan.total_cost,
+      cost_delta: entry.new_plan.total_cost - entry.previous_plan.total_cost,
+      decisions: newPlan.decisions,
+      previous_plan: prevPlan,
+      new_plan: newPlan,
+    };
+  });
 }
 
 /**
@@ -185,20 +196,42 @@ export function getDecisionUpdateViewModel(
   newPlan: DecisionPlan,
   businessState: BusinessState
 ): DecisionUpdateViewModel {
-  const invBPrev = previousPlan.decisions.find((d) => d.invoice_id.includes('B'))?.selected_action || 'DELAY';
-  const invBNew = newPlan.decisions.find((d) => d.invoice_id.includes('B'))?.selected_action || 'BANK_FINANCE';
+  // Dynamically find which invoice changed action between previousPlan and newPlan
+  let changedDecisionNew = newPlan.decisions.find((newDec) => {
+    const prevDec = previousPlan.decisions.find((p) => p.invoice_id === newDec.invoice_id);
+    return prevDec && prevDec.selected_action !== newDec.selected_action;
+  });
+
+  if (!changedDecisionNew) {
+    changedDecisionNew = newPlan.decisions.find((newDec) => {
+      const prevDec = previousPlan.decisions.find((p) => p.invoice_id === newDec.invoice_id);
+      return prevDec && prevDec.cost !== newDec.cost;
+    }) || newPlan.decisions[0];
+  }
+
+  const targetInvoiceId = changedDecisionNew?.invoice_id || 'INV-B';
+  const changedDecisionPrev = previousPlan.decisions.find((d) => d.invoice_id === targetInvoiceId);
+
+  const prevAction = changedDecisionPrev?.selected_action || 'DELAY';
+  const newAction = changedDecisionNew?.selected_action || 'BANK_FINANCE';
+  const hasPivot = prevAction !== newAction;
+
   const costDiff = newPlan.total_cost - previousPlan.total_cost;
   const costDeltaFormatted = costDiff >= 0 ? `+${formatRupees(costDiff)}` : `-${formatRupees(Math.abs(costDiff))}`;
-  const receivable = businessState.receivables.find((item) => item.id === 'AR-Y');
-  const invBDecision = newPlan.decisions.find((decision) => decision.invoice_id.includes('B'));
-  const hasPivot = invBPrev !== invBNew;
-  const decisionReason = invBDecision?.reason || 'No decision reason supplied by the current API response.';
-  const actionPlanInvoices = getInvoiceViewModels(businessState, newPlan).map((invoice) => ({
-    ...invoice,
-    status: invoice.id === 'inv-b' ? 'PROCESSING' as const : invoice.status,
-    statusText: invoice.id === 'inv-b' ? 'Processing' : invoice.statusText || invoice.status,
-    isUpdated: invoice.id === 'inv-b' && invBPrev !== invBNew,
-  }));
+
+  // Find the receivable that was modified or primary receivable
+  const receivable = businessState.receivables.find((r) => r.id === 'AR-Y') || businessState.receivables[0];
+  const decisionReason = changedDecisionNew?.reason || 'CP-SAT optimization complete.';
+
+  const actionPlanInvoices = getInvoiceViewModels(businessState, newPlan).map((invoice) => {
+    const isTarget = invoice.name.toUpperCase().replace(/\s+/g, '-') === targetInvoiceId.toUpperCase();
+    return {
+      ...invoice,
+      status: isTarget ? ('PROCESSING' as const) : invoice.status,
+      statusText: isTarget ? 'Processing' : invoice.statusText || invoice.status,
+      isUpdated: isTarget && hasPivot,
+    };
+  });
 
   const expectedTrace = businessState.expected_cash_trace || businessState.expected_cash_flow_trace;
   const conservativeTrace = businessState.conservative_cash_trace || businessState.conservative_cash_flow_trace;
@@ -206,6 +239,7 @@ export function getDecisionUpdateViewModel(
     ...(expectedTrace || []).map((point) => point.day),
     ...(conservativeTrace || []).map((point) => point.day),
   ])).sort((left, right) => left - right);
+
   const forecastMilestones: import('../types').ForecastMilestone[] = traceDays.map((day) => ({
     day,
     dayLabel: `Day ${day}`,
@@ -216,15 +250,21 @@ export function getDecisionUpdateViewModel(
 
   return {
     title: 'Decision Updated',
-    subtitle: receivable ? `Customer ${receivable.customer || 'receivable'} is expected on Day ${receivable.expected_day}. ${hasPivot ? `TREVO changed INV-B from ${getActionLabel(invBPrev)} to ${getActionLabel(invBNew)}.` : 'TREVO reassessed the portfolio and retained the current plan.'}` : 'The current API response does not include receivable timing details.',
+    subtitle: receivable
+      ? `Customer ${receivable.customer || receivable.id} expected on Day ${receivable.expected_day}. ${
+          hasPivot
+            ? `TREVO changed ${targetInvoiceId} from ${getActionLabel(prevAction)} to ${getActionLabel(newAction)}.`
+            : 'TREVO reassessed the portfolio and retained the current plan.'
+        }`
+      : 'The current API response does not include receivable timing details.',
     tag: 'Real-time Adjustment',
     previousPlan: {
-      target: 'INV B',
-      action: invBPrev,
+      target: targetInvoiceId.replace('-', ' '),
+      action: prevAction,
     },
     newOptimalPlan: {
-      target: 'INV B',
-      action: invBNew,
+      target: targetInvoiceId.replace('-', ' '),
+      action: newAction,
     },
     costDelta: costDeltaFormatted,
     costDeltaRaw: costDiff,
@@ -235,35 +275,43 @@ export function getDecisionUpdateViewModel(
       {
         stepNumber: 1,
         title: '1. External Event',
-        description: receivable ? `Customer ${receivable.customer || 'receivable'} expected payment on Day ${receivable.expected_day}.` : 'Receivable event details unavailable.',
+        description: receivable
+          ? `Receivable ${receivable.id} (${receivable.customer || 'Customer'}) expected on Day ${receivable.expected_day}.`
+          : 'Receivable event timing updated in portfolio state.',
         type: 'event',
         iconType: 'alert',
       },
       {
         stepNumber: 2,
         title: '2. Viability Check',
-        description: hasPivot ? `Previous ${getActionLabel(invBPrev)} plan for INV-B was no longer selected after reassessment.` : 'The previous plan remained selected after reassessment.',
+        description: hasPivot
+          ? `Previous ${getActionLabel(prevAction)} plan for ${targetInvoiceId} was no longer viable after liquidity reassessment.`
+          : 'The previous plan remained viable and optimal after reassessment.',
         type: 'viability',
         iconType: 'clock',
       },
       {
         stepNumber: 3,
         title: '3. Risk Detected',
-        description: invBDecision?.binding_constraint ? `Constraint affecting this decision: ${formatEngineTerm(invBDecision.binding_constraint)}.` : 'No binding constraint was supplied by the current API response.',
+        description: changedDecisionNew?.binding_constraint
+          ? `Active constraint: ${formatEngineTerm(changedDecisionNew.binding_constraint)}.`
+          : `Protected buffer requirement (₹${(businessState.buffer / 100000).toFixed(1)}L) preserved across all horizon checkpoints.`,
         type: 'risk',
         iconType: 'shield',
       },
       {
         stepNumber: 4,
         title: '4. Re-optimization',
-        description: `Switched INV B strategy to ${getActionLabel(invBNew)} to bridge the gap.`,
+        description: hasPivot
+          ? `Switched ${targetInvoiceId} strategy to ${getActionLabel(newAction)} to maintain liquidity margin.`
+          : 'Portfolio re-optimized jointly across all invoice options.',
         type: 'reopt',
         iconType: 'refresh',
       },
       {
         stepNumber: 5,
         title: '5. Outcome',
-        description: `Portfolio cost is ${formatRupees(newPlan.total_cost)}. ${formatEngineExplanation(decisionReason)}`,
+        description: `Optimized total cost: ${formatRupees(newPlan.total_cost)}. ${formatEngineExplanation(decisionReason)}`,
         type: 'outcome',
         iconType: 'check',
       },
@@ -278,20 +326,30 @@ export function getDecisionUpdateViewModel(
  * Adapter: Maps canonical HistoryEntry items to HistoryViewModel objects
  */
 export function getHistoryViewModels(entries: HistoryEntry[]): HistoryViewModel[] {
-  return entries.map((entry, index) => {
-    const priorEntry = entries[index + 1];
-    const currentDecision = entry.new_plan?.decisions.find((decision) => entry.previous_plan?.decisions.find((previous) => previous.invoice_id === decision.invoice_id)?.selected_action !== decision.selected_action)
-      || entry.decisions.find((decision) => decision.invoice_id.includes('B'));
-    const priorDecision = entry.previous_plan?.decisions.find((decision) => decision.invoice_id === currentDecision?.invoice_id)
-      || priorEntry?.decisions.find((decision) => decision.invoice_id === currentDecision?.invoice_id);
-    const didPivot = currentDecision && priorDecision && currentDecision.selected_action !== priorDecision.selected_action;
-    const shift = entry.event_type === 'RECEIVABLE_DELAY'
-      ? didPivot
-        ? `${getActionLabel(priorDecision.selected_action)} → ${getActionLabel(currentDecision.selected_action)}`
-        : 'No strategy change'
-      : entry.event_type === 'INITIAL_OPTIMIZE'
+  return entries.map((entry) => {
+    const prevDecisions = entry.previous_plan?.decisions || [];
+    const newDecisions = entry.new_plan?.decisions || entry.decisions;
+
+    // Find invoice that pivoted
+    let pivotedInvoiceId: string | undefined;
+    let fromAction: string | undefined;
+    let toAction: string | undefined;
+
+    for (const newDec of newDecisions) {
+      const prevDec = prevDecisions.find((p) => p.invoice_id === newDec.invoice_id);
+      if (prevDec && prevDec.selected_action !== newDec.selected_action) {
+        pivotedInvoiceId = newDec.invoice_id;
+        fromAction = prevDec.selected_action;
+        toAction = newDec.selected_action;
+        break;
+      }
+    }
+
+    const shift = (fromAction && toAction)
+      ? `${getActionLabel(fromAction)} → ${getActionLabel(toAction)}`
+      : entry.event_type.includes('INITIAL')
       ? 'Portfolio optimization'
-      : 'Rebalanced';
+      : 'No strategy change';
 
     const costText = entry.cost_delta !== undefined
       ? entry.cost_delta === 0
@@ -304,10 +362,11 @@ export function getHistoryViewModels(entries: HistoryEntry[]): HistoryViewModel[
       timestamp: entry.timestamp,
       eventType: entry.event_type.replace(/_/g, ' '),
       title: entry.description,
-      description: `Optimized total execution cost at ${formatRupees(entry.total_cost)}. Guardrails verified.`,
+      description: `Optimized execution cost at ${formatRupees(entry.total_cost)}. ${pivotedInvoiceId ? `Affected payable: ${pivotedInvoiceId}.` : 'Portfolio rebalanced.'}`,
       strategyShift: shift,
       costImpact: costText,
       status: entry.event_type === 'RECEIVABLE_DELAY' ? 'OPTIMIZED' : 'RESOLVED',
     };
   });
 }
+
