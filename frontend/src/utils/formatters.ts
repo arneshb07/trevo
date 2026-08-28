@@ -1,8 +1,8 @@
 /**
- * Formats an integer rupee amount into Indian currency format (e.g. ₹10,00,000)
+ * Formats an integer or decimal rupee amount into Indian currency format (e.g. ₹10,00,000)
  */
-export function formatRupees(amount: number): string {
-  if (isNaN(amount) || amount === null || amount === undefined) {
+export function formatRupees(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || isNaN(amount)) {
     return '₹0';
   }
   const isNegative = amount < 0;
@@ -22,14 +22,22 @@ export function formatRupees(amount: number): string {
 /**
  * Formats a decimal into percentage string (e.g. 0.12 -> 12%, 0.008 -> 0.8%)
  */
-export function formatPercent(rate: number | undefined): string {
-  if (rate === undefined || rate === null || rate === 0) return '0%';
+export function formatPercent(rate: number | null | undefined): string {
+  if (rate === undefined || rate === null || isNaN(rate) || rate === 0) return '0%';
   const pct = rate * 100;
   return Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`;
 }
 
 /**
- * Returns readable label for ActionType
+ * Formats a number of days (e.g. Day 5 or 5 Days)
+ */
+export function formatDays(days: number | null | undefined, prefix: 'Day' | 'days' = 'Day'): string {
+  if (days === undefined || days === null) return 'N/A';
+  return prefix === 'Day' ? `Day ${days}` : `${days} days`;
+}
+
+/**
+ * Returns human-readable label for ActionType
  */
 export function getActionLabel(action: string): string {
   switch (action) {

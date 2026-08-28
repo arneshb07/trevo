@@ -100,16 +100,32 @@ export interface EventResponse {
   updated_state?: BusinessState;
 }
 
-export interface HistoryItem {
+export interface HistoryEntry {
   id: string;
   timestamp: string;
-  event: FinancialEvent;
-  decisions: Decision[];
+  event_type: string;
+  description: string;
   total_cost: number;
+  cost_delta?: number;
+  decisions: Decision[];
 }
 
 export interface CounterfactualPoint {
   parameter_value: number;
   optimal_action: ActionType;
   cost: number;
+  feasible: boolean;
+  reason?: string;
+}
+
+export interface CounterfactualResponse {
+  invoice_id: string;
+  parameter_name: string;
+  points: CounterfactualPoint[];
+}
+
+export interface ApiErrorResponse {
+  detail?: string;
+  message?: string;
+  status_code?: number;
 }

@@ -3,54 +3,110 @@ import {
   Decision, 
   FinancialEvent, 
   EventResponse, 
-  HistoryItem, 
-  CounterfactualPoint 
+  HistoryEntry, 
+  CounterfactualResponse,
+  ApiErrorResponse 
 } from '../types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+export class ApiError extends Error {
+  statusCode?: number;
+  endpoint: string;
+  detail?: string;
+
+  constructor(message: string, endpoint: string, statusCode?: number, detail?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.endpoint = endpoint;
+    this.statusCode = statusCode;
+    this.detail = detail;
+  }
+}
+
+const DEFAULT_TIMEOUT_MS = 10000;
 
 class ApiService {
+  private getBaseUrl(): string {
+    const rawUrl = import.meta.env.VITE_API_BASE_URL;
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return '';
+    }
+    return rawUrl.replace(/\/+$/, '');
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const baseUrl = this.getBaseUrl();
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
     try {
       const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers,
         },
+        signal: controller.signal,
         ...options,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorBody = await response.text().catch(() => '');
-        throw new Error(`API Error ${response.status}: ${response.statusText} ${errorBody}`);
+        let errorDetail = '';
+        try {
+          const errJson: ApiErrorResponse = await response.json();
+          errorDetail = errJson.detail || errJson.message || JSON.stringify(errJson);
+        } catch {
+          errorDetail = await response.text().catch(() => '');
+        }
+        throw new ApiError(
+          `Request to ${cleanEndpoint} failed (${response.status} ${response.statusText})${errorDetail ? `: ${errorDetail}` : ''}`,
+          cleanEndpoint,
+          response.status,
+          errorDetail
+        );
+      }
+
+      // Handle 204 No Content
+      if (response.status === 204) {
+        return {} as T;
       }
 
       return await response.json();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        throw new Error(`Network/API request failed for ${endpoint}: ${err.message}`);
+      clearTimeout(timeoutId);
+      if (err instanceof ApiError) {
+        throw err;
       }
-      throw new Error(`Unknown network error occurred for ${endpoint}`);
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new ApiError(`Request to ${cleanEndpoint} timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`, cleanEndpoint, 408);
+        }
+        throw new ApiError(`Network connection error for ${cleanEndpoint}: ${err.message}`, cleanEndpoint);
+      }
+      throw new ApiError(`Unknown network error occurred for ${cleanEndpoint}`, cleanEndpoint);
     }
   }
 
   /**
-   * Fetch current BusinessState from backend
+   * Fetch current BusinessState from backend (GET /state)
    */
   async getState(): Promise<BusinessState> {
     return this.request<BusinessState>('/state');
   }
 
   /**
-   * Fetch current optimizer decisions
+   * Fetch current optimizer decisions (GET /decisions)
    */
   async getDecisions(): Promise<Decision[]> {
     return this.request<Decision[]>('/decisions');
   }
 
   /**
-   * Post a financial shock / event to trigger re-optimization
+   * Post a financial shock / event to trigger re-optimization (POST /events)
    */
   async postEvent(event: FinancialEvent): Promise<EventResponse> {
     return this.request<EventResponse>('/events', {
@@ -60,7 +116,7 @@ class ApiService {
   }
 
   /**
-   * Force re-optimization of the current state
+   * Force re-optimization of the current state (POST /optimize)
    */
   async postOptimize(): Promise<Decision[]> {
     return this.request<Decision[]>('/optimize', {
@@ -69,17 +125,17 @@ class ApiService {
   }
 
   /**
-   * Fetch decision & event history
+   * Fetch decision & event history (GET /history)
    */
-  async getHistory(): Promise<HistoryItem[]> {
-    return this.request<HistoryItem[]>('/history');
+  async getHistory(): Promise<HistoryEntry[]> {
+    return this.request<HistoryEntry[]>('/history');
   }
 
   /**
-   * Counterfactual parameter sweep for a given decision/invoice ID
+   * Counterfactual parameter sweep for a given decision/invoice ID (GET /decision/:id/counterfactual)
    */
-  async getCounterfactual(id: string): Promise<CounterfactualPoint[]> {
-    return this.request<CounterfactualPoint[]>(`/decision/${id}/counterfactual`);
+  async getCounterfactual(id: string): Promise<CounterfactualResponse> {
+    return this.request<CounterfactualResponse>(`/decision/${id}/counterfactual`);
   }
 }
 

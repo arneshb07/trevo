@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BusinessState, DecisionPlan } from './types';
+import { 
+  BusinessState, 
+  DecisionPlan, 
+  HistoryEntry, 
+  CounterfactualResponse 
+} from './types';
 import { 
   baselineBusinessState, 
   baselineDecisionPlan, 
   shockBusinessState, 
-  shockDecisionPlan 
+  shockDecisionPlan,
+  mockHistoryEntries,
+  mockCounterfactuals
 } from './mock';
-import api from './services/api';
+import api, { ApiError } from './services/api';
 
 import { Header } from './components/layout/Header';
 import { SummaryCards } from './components/dashboard/SummaryCards';
@@ -15,6 +22,8 @@ import { EventSimulator } from './components/events/EventSimulator';
 import { PayablesTable } from './components/payables/PayablesTable';
 import { ReceivablesTable } from './components/receivables/ReceivablesTable';
 import { FinancingSummary } from './components/financing/FinancingSummary';
+import { HistoryPanel } from './components/history/HistoryPanel';
+import { CounterfactualInspector } from './components/counterfactual/CounterfactualInspector';
 import { DashboardSkeleton } from './components/common/LoadingSkeleton';
 import { ErrorBanner } from './components/common/ErrorBanner';
 
@@ -24,8 +33,21 @@ export const App: React.FC = () => {
   const [previousCost, setPreviousCost] = useState<number | undefined>(undefined);
   const [isShockActive, setIsShockActive] = useState<boolean>(false);
   const [mode, setMode] = useState<'demo' | 'live'>('demo');
+  
+  // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false);
+  const [isCounterfactualLoading, setIsCounterfactualLoading] = useState<boolean>(false);
+  
+  // History state
+  const [history, setHistory] = useState<HistoryEntry[]>(mockHistoryEntries);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  
+  // Counterfactual state
+  const [counterfactualData, setCounterfactualData] = useState<CounterfactualResponse | null>(null);
+  
+  // Error state
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Initialize data - attempt live backend first, fallback cleanly to mock
@@ -33,23 +55,35 @@ export const App: React.FC = () => {
     setIsInitialLoading(true);
     setApiError(null);
     try {
-      // Try to fetch from backend if endpoint responds
       const [remoteState, remoteDecisions] = await Promise.all([
         api.getState(),
         api.getDecisions(),
       ]);
 
-      setBusinessState(remoteState);
-      const total = remoteDecisions.reduce((acc, d) => acc + (d.cost || 0), 0);
-      setDecisionPlan({
-        decisions: remoteDecisions,
-        total_cost: total,
-      });
-      setMode('live');
+      if (remoteState && remoteDecisions) {
+        setBusinessState(remoteState);
+        const total = remoteDecisions.reduce((acc, d) => acc + (d.cost || 0), 0);
+        setDecisionPlan({
+          decisions: remoteDecisions,
+          total_cost: total,
+        });
+        setMode('live');
+        
+        // Fetch history if available
+        try {
+          const remoteHistory = await api.getHistory();
+          if (Array.isArray(remoteHistory)) {
+            setHistory(remoteHistory);
+          }
+        } catch {
+          // History endpoint optional/graceful fallback
+        }
+      }
     } catch {
-      // Backend unavailable or not running - use canonical mock baseline
+      // Backend unavailable - use canonical mock baseline
       setBusinessState(baselineBusinessState);
       setDecisionPlan(baselineDecisionPlan);
+      setHistory(mockHistoryEntries);
       setMode('demo');
     } finally {
       setIsInitialLoading(false);
@@ -64,6 +98,7 @@ export const App: React.FC = () => {
   const handleSimulateShock = async () => {
     setIsLoading(true);
     setPreviousCost(decisionPlan.total_cost);
+    setApiError(null);
 
     if (mode === 'live') {
       try {
@@ -79,7 +114,6 @@ export const App: React.FC = () => {
         if (response.updated_state) {
           setBusinessState(response.updated_state);
         } else {
-          // Update local state if backend didn't return full state
           setBusinessState(prev => ({
             ...prev,
             receivables: prev.receivables.map(r => 
@@ -87,26 +121,32 @@ export const App: React.FC = () => {
             )
           }));
         }
+
+        // Refresh history
+        try {
+          const updatedHistory = await api.getHistory();
+          if (Array.isArray(updatedHistory)) {
+            setHistory(updatedHistory);
+          }
+        } catch {
+          // Keep current history
+        }
+
         setIsShockActive(true);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Event API call failed';
+        const msg = err instanceof ApiError ? err.message : 'Event simulation request failed on backend';
         setApiError(msg);
-        // Fallback to mock shock
-        setBusinessState(shockBusinessState);
-        setDecisionPlan(shockDecisionPlan);
-        setIsShockActive(true);
-        setMode('demo');
       } finally {
         setIsLoading(false);
       }
     } else {
-      // Demo / Mock mode transition with realistic async feedback
+      // Demo Mode deterministic transition
       setTimeout(() => {
         setBusinessState(shockBusinessState);
         setDecisionPlan(shockDecisionPlan);
         setIsShockActive(true);
         setIsLoading(false);
-      }, 350);
+      }, 300);
     }
   };
 
@@ -114,18 +154,16 @@ export const App: React.FC = () => {
   const handleReset = async () => {
     setIsLoading(true);
     setPreviousCost(undefined);
+    setApiError(null);
 
     if (mode === 'live') {
       try {
         await api.postOptimize();
         await loadInitialData();
         setIsShockActive(false);
-      } catch {
-        // Fallback to baseline mock
-        setBusinessState(baselineBusinessState);
-        setDecisionPlan(baselineDecisionPlan);
-        setIsShockActive(false);
-        setMode('demo');
+      } catch (err: unknown) {
+        const msg = err instanceof ApiError ? err.message : 'Reset optimization request failed on backend';
+        setApiError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -139,14 +177,79 @@ export const App: React.FC = () => {
     }
   };
 
+  // Refresh History
+  const handleRefreshHistory = async () => {
+    if (mode === 'live') {
+      setIsHistoryLoading(true);
+      try {
+        const remoteHistory = await api.getHistory();
+        if (Array.isArray(remoteHistory)) {
+          setHistory(remoteHistory);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to fetch history';
+        setApiError(msg);
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    } else {
+      setIsHistoryLoading(true);
+      setTimeout(() => {
+        setHistory(isShockActive ? mockHistoryEntries : [mockHistoryEntries[0]]);
+        setIsHistoryLoading(false);
+      }, 200);
+    }
+  };
+
+  // Inspect Counterfactual Parameter Sweep
+  const handleInspectCounterfactual = async (invoiceId: string) => {
+    setIsCounterfactualLoading(true);
+    setCounterfactualData(null);
+
+    if (mode === 'live') {
+      try {
+        const data = await api.getCounterfactual(invoiceId);
+        setCounterfactualData(data);
+      } catch (err: unknown) {
+        const msg = err instanceof ApiError ? err.message : `Failed to fetch counterfactual sweep for ${invoiceId}`;
+        setApiError(msg);
+        // Fallback to mock sweep data if available
+        if (mockCounterfactuals[invoiceId]) {
+          setCounterfactualData(mockCounterfactuals[invoiceId]);
+        }
+      } finally {
+        setIsCounterfactualLoading(false);
+      }
+    } else {
+      // Demo Mode deterministic mock counterfactual sweep
+      setTimeout(() => {
+        const mockData = mockCounterfactuals[invoiceId] || {
+          invoice_id: invoiceId,
+          parameter_name: 'Interest / Discount Rate',
+          points: [
+            { parameter_value: 0.05, optimal_action: 'PAY_NOW', cost: 1000, feasible: true },
+            { parameter_value: 0.10, optimal_action: 'BANK_FINANCE', cost: 2000, feasible: true }
+          ]
+        };
+        setCounterfactualData(mockData);
+        setIsCounterfactualLoading(false);
+      }, 250);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col justify-between">
       {/* Header */}
-      <Header mode={mode} isOptimizerReady={true} />
+      <Header 
+        mode={mode} 
+        isOptimizerReady={true} 
+        onRefreshLive={loadInitialData}
+        isRefreshing={isLoading || isInitialLoading}
+      />
 
       {/* Main Content Area */}
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex-1 space-y-6">
-        {/* Error / Offline Notice */}
+        {/* Error Notice */}
         {apiError && (
           <ErrorBanner message={apiError} onRetry={loadInitialData} />
         )}
@@ -176,6 +279,7 @@ export const App: React.FC = () => {
             <PayablesTable
               payables={businessState.payables}
               decisions={decisionPlan.decisions}
+              onInspectCounterfactual={handleInspectCounterfactual}
             />
 
             {/* Section 4: Receivables Table */}
@@ -189,9 +293,25 @@ export const App: React.FC = () => {
               financing={businessState.financing}
               obligations={businessState.obligations}
             />
+
+            {/* Section 11: History Section */}
+            <HistoryPanel
+              history={history}
+              isOpen={isHistoryOpen}
+              onToggle={() => setIsHistoryOpen(!isHistoryOpen)}
+              onRefresh={handleRefreshHistory}
+              isLoading={isHistoryLoading}
+            />
           </>
         )}
       </main>
+
+      {/* Counterfactual Parameter Sweep Modal */}
+      <CounterfactualInspector
+        data={counterfactualData}
+        isLoading={isCounterfactualLoading}
+        onClose={() => setCounterfactualData(null)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/40 px-4 sm:px-8 py-4 mt-8">

@@ -1,13 +1,19 @@
 import React from 'react';
 import { Payable, Decision } from '../../types';
 import { formatRupees, formatPercent, getActionLabel, getActionBadgeStyle } from '../../utils/formatters';
+import { Sliders } from 'lucide-react';
 
 interface PayablesTableProps {
   payables: Payable[];
   decisions: Decision[];
+  onInspectCounterfactual?: (invoiceId: string) => void;
 }
 
-export const PayablesTable: React.FC<PayablesTableProps> = ({ payables, decisions }) => {
+export const PayablesTable: React.FC<PayablesTableProps> = ({ 
+  payables, 
+  decisions, 
+  onInspectCounterfactual 
+}) => {
   // Map decisions by invoice_id
   const decisionMap = new Map<string, Decision>();
   decisions.forEach(d => decisionMap.set(d.invoice_id, d));
@@ -50,7 +56,7 @@ export const PayablesTable: React.FC<PayablesTableProps> = ({ payables, decision
               <th className="px-5 py-3.5">Discount</th>
               <th className="px-5 py-3.5">Importance</th>
               <th className="px-5 py-3.5">Recommended Action</th>
-              <th className="px-5 py-3.5 text-right">Status</th>
+              <th className="px-5 py-3.5 text-right">Actions / Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -102,10 +108,23 @@ export const PayablesTable: React.FC<PayablesTableProps> = ({ payables, decision
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <span className="inline-flex items-center text-xs font-medium text-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span>
-                      Optimized
-                    </span>
+                    <div className="flex items-center justify-end gap-2">
+                      {onInspectCounterfactual && (
+                        <button
+                          type="button"
+                          onClick={() => onInspectCounterfactual(payable.id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                          title="Inspect Counterfactual Parameter Sweep"
+                        >
+                          <Sliders className="w-3 h-3 text-blue-400" />
+                          <span>Sweep</span>
+                        </button>
+                      )}
+                      <span className="inline-flex items-center text-xs font-medium text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span>
+                        Optimized
+                      </span>
+                    </div>
                   </td>
                 </tr>
               );

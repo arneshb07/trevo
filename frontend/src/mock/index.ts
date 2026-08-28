@@ -1,4 +1,9 @@
-import { BusinessState, DecisionPlan } from '../types';
+import { 
+  BusinessState, 
+  DecisionPlan, 
+  HistoryEntry, 
+  CounterfactualResponse 
+} from '../types';
 
 export const baselineBusinessState: BusinessState = {
   cash: 1000000,
@@ -197,4 +202,58 @@ export const shockDecisionPlan: DecisionPlan = {
       ]
     }
   ]
+};
+
+export const mockHistoryEntries: HistoryEntry[] = [
+  {
+    id: "hist-001",
+    timestamp: "2026-08-28 10:00:00",
+    event_type: "INITIAL_OPTIMIZE",
+    description: "Initial portfolio baseline joint optimization",
+    total_cost: 5236,
+    decisions: baselineDecisionPlan.decisions
+  },
+  {
+    id: "hist-002",
+    timestamp: "2026-08-28 10:15:30",
+    event_type: "RECEIVABLE_DELAY",
+    description: "AR-Y delayed to Day 20 (Beta ₹3,00,000)",
+    total_cost: 5795,
+    cost_delta: 559,
+    decisions: shockDecisionPlan.decisions
+  }
+];
+
+export const mockCounterfactuals: Record<string, CounterfactualResponse> = {
+  "INV-A": {
+    invoice_id: "INV-A",
+    parameter_name: "Discount Rate (%)",
+    points: [
+      { parameter_value: 1.0, optimal_action: "PAY_MATURITY", cost: 6000, feasible: true },
+      { parameter_value: 2.0, optimal_action: "BANK_FINANCE", cost: 3973, feasible: true },
+      { parameter_value: 3.0, optimal_action: "BANK_FINANCE", cost: 1973, feasible: true, reason: "Baseline discount point" },
+      { parameter_value: 4.0, optimal_action: "BANK_FINANCE", cost: -27, feasible: true },
+      { parameter_value: 5.0, optimal_action: "BANK_FINANCE", cost: -2027, feasible: true }
+    ]
+  },
+  "INV-B": {
+    invoice_id: "INV-B",
+    parameter_name: "AR-Y Delay Days",
+    points: [
+      { parameter_value: 0, optimal_action: "DELAY", cost: 2400, feasible: true, reason: "Baseline optimal" },
+      { parameter_value: 5, optimal_action: "DELAY", cost: 2400, feasible: true },
+      { parameter_value: 10, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true, reason: "Buffer threshold breached" },
+      { parameter_value: 15, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true }
+    ]
+  },
+  "INV-C": {
+    invoice_id: "INV-C",
+    parameter_name: "Supplier Financing Rate (%)",
+    points: [
+      { parameter_value: 5.0, optimal_action: "SUPPLIER_FINANCE", cost: 616, feasible: true },
+      { parameter_value: 7.0, optimal_action: "SUPPLIER_FINANCE", cost: 863, feasible: true, reason: "Baseline rate" },
+      { parameter_value: 10.0, optimal_action: "SUPPLIER_FINANCE", cost: 1233, feasible: true },
+      { parameter_value: 13.0, optimal_action: "BANK_FINANCE", cost: 1479, feasible: true, reason: "Bank facility becomes cheaper" }
+    ]
+  }
 };
