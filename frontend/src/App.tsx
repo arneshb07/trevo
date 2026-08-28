@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   BusinessState, 
   DecisionPlan, 
+  Decision, 
   HistoryEntry, 
   CounterfactualResponse 
 } from './types';
@@ -15,42 +16,40 @@ import {
 } from './mock';
 import api, { ApiError } from './services/api';
 
-import { Header } from './components/layout/Header';
-import { SummaryCards } from './components/dashboard/SummaryCards';
-import { DecisionSummary } from './components/dashboard/DecisionSummary';
-import { EventSimulator } from './components/events/EventSimulator';
-import { PayablesTable } from './components/payables/PayablesTable';
-import { ReceivablesTable } from './components/receivables/ReceivablesTable';
-import { FinancingSummary } from './components/financing/FinancingSummary';
-import { HistoryPanel } from './components/history/HistoryPanel';
-import { CounterfactualInspector } from './components/counterfactual/CounterfactualInspector';
+import { TrevoHeader } from './components/layout/TrevoHeader';
+import { BottomNav, NavTab } from './components/layout/BottomNav';
+import { OverviewPage } from './pages/OverviewPage';
+import { DecisionsPage } from './pages/DecisionsPage';
+import { DecisionDetailPage } from './pages/DecisionDetailPage';
+import { HistoryPage } from './pages/HistoryPage';
 import { DashboardSkeleton } from './components/common/LoadingSkeleton';
 import { ErrorBanner } from './components/common/ErrorBanner';
 
 export const App: React.FC = () => {
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<NavTab>('OVERVIEW');
+  const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
+
+  // Business & Decision State
   const [businessState, setBusinessState] = useState<BusinessState>(baselineBusinessState);
   const [decisionPlan, setDecisionPlan] = useState<DecisionPlan>(baselineDecisionPlan);
-  const [previousCost, setPreviousCost] = useState<number | undefined>(undefined);
   const [isShockActive, setIsShockActive] = useState<boolean>(false);
-  const [mode, setMode] = useState<'demo' | 'live'>('demo');
+  const [hasUnviewedDecision, setHasUnviewedDecision] = useState<boolean>(false);
   
-  // Loading states
+  // History State
+  const [history, setHistory] = useState<HistoryEntry[]>(mockHistoryEntries);
+  
+  // Counterfactual State
+  const [counterfactualData, setCounterfactualData] = useState<CounterfactualResponse | null>(null);
+
+  // App & Connection State
+  const [mode, setMode] = useState<'demo' | 'live'>('demo');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
-  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false);
-  const [isCounterfactualLoading, setIsCounterfactualLoading] = useState<boolean>(false);
-  
-  // History state
-  const [history, setHistory] = useState<HistoryEntry[]>(mockHistoryEntries);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-  
-  // Counterfactual state
-  const [counterfactualData, setCounterfactualData] = useState<CounterfactualResponse | null>(null);
-  
-  // Error state
+  const [isVoiceLoading, setIsVoiceLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Initialize data - attempt live backend first, fallback cleanly to mock
+  // Initial load: Attempt backend connection, fallback gracefully to mock baseline
   const loadInitialData = useCallback(async () => {
     setIsInitialLoading(true);
     setApiError(null);
@@ -68,19 +67,18 @@ export const App: React.FC = () => {
           total_cost: total,
         });
         setMode('live');
-        
-        // Fetch history if available
+
         try {
           const remoteHistory = await api.getHistory();
           if (Array.isArray(remoteHistory)) {
             setHistory(remoteHistory);
           }
         } catch {
-          // History endpoint optional/graceful fallback
+          // Graceful fallback
         }
       }
     } catch {
-      // Backend unavailable - use canonical mock baseline
+      // Offline fallback: Use gold baseline
       setBusinessState(baselineBusinessState);
       setDecisionPlan(baselineDecisionPlan);
       setHistory(mockHistoryEntries);
@@ -94,10 +92,9 @@ export const App: React.FC = () => {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Handle Event: AR-Y Receivable Delay
-  const handleSimulateShock = async () => {
+  // Primary Event: Simulate Receivable Delay (AR-Y to Day 20)
+  const handleSimulateEvent = async (delayDay: number = 20) => {
     setIsLoading(true);
-    setPreviousCost(decisionPlan.total_cost);
     setApiError(null);
 
     if (mode === 'live') {
@@ -105,7 +102,7 @@ export const App: React.FC = () => {
         const response = await api.postEvent({
           type: 'RECEIVABLE_DELAY',
           receivable_id: 'AR-Y',
-          new_expected_day: 20,
+          new_expected_day: delayDay,
         });
 
         if (response.new_plan) {
@@ -117,12 +114,11 @@ export const App: React.FC = () => {
           setBusinessState(prev => ({
             ...prev,
             receivables: prev.receivables.map(r => 
-              r.id === 'AR-Y' ? { ...r, expected_day: 20, late_day: 20 } : r
+              r.id === 'AR-Y' || r.id === 'AR Y' ? { ...r, expected_day: delayDay, late_day: delayDay } : r
             )
           }));
         }
 
-        // Refresh history
         try {
           const updatedHistory = await api.getHistory();
           if (Array.isArray(updatedHistory)) {
@@ -133,8 +129,10 @@ export const App: React.FC = () => {
         }
 
         setIsShockActive(true);
+        setHasUnviewedDecision(true);
+        setActiveTab('DECISIONS');
       } catch (err: unknown) {
-        const msg = err instanceof ApiError ? err.message : 'Event simulation request failed on backend';
+        const msg = err instanceof ApiError ? err.message : 'Event simulation failed on backend';
         setApiError(msg);
       } finally {
         setIsLoading(false);
@@ -145,15 +143,16 @@ export const App: React.FC = () => {
         setBusinessState(shockBusinessState);
         setDecisionPlan(shockDecisionPlan);
         setIsShockActive(true);
+        setHasUnviewedDecision(true);
         setIsLoading(false);
-      }, 300);
+        setActiveTab('DECISIONS');
+      }, 350);
     }
   };
 
-  // Handle Reset to Baseline
+  // Reset to Baseline State
   const handleReset = async () => {
     setIsLoading(true);
-    setPreviousCost(undefined);
     setApiError(null);
 
     if (mode === 'live') {
@@ -161,8 +160,9 @@ export const App: React.FC = () => {
         await api.postOptimize();
         await loadInitialData();
         setIsShockActive(false);
+        setHasUnviewedDecision(false);
       } catch (err: unknown) {
-        const msg = err instanceof ApiError ? err.message : 'Reset optimization request failed on backend';
+        const msg = err instanceof ApiError ? err.message : 'Reset failed on backend';
         setApiError(msg);
       } finally {
         setIsLoading(false);
@@ -172,162 +172,122 @@ export const App: React.FC = () => {
         setBusinessState(baselineBusinessState);
         setDecisionPlan(baselineDecisionPlan);
         setIsShockActive(false);
+        setHasUnviewedDecision(false);
         setIsLoading(false);
       }, 250);
     }
   };
 
-  // Refresh History
-  const handleRefreshHistory = async () => {
+  // Select a Decision to inspect detail
+  const handleSelectDecision = async (decision: Decision) => {
+    setSelectedDecision(decision);
+    setCounterfactualData(mockCounterfactuals[decision.invoice_id] || null);
+
     if (mode === 'live') {
-      setIsHistoryLoading(true);
       try {
-        const remoteHistory = await api.getHistory();
-        if (Array.isArray(remoteHistory)) {
-          setHistory(remoteHistory);
+        const sweepData = await api.getCounterfactual(decision.invoice_id);
+        if (sweepData) {
+          setCounterfactualData(sweepData);
         }
-      } catch (err: unknown) {
-        const msg = err instanceof ApiError ? err.message : 'Failed to fetch history';
-        setApiError(msg);
-      } finally {
-        setIsHistoryLoading(false);
+      } catch {
+        // Fallback to mock counterfactual
       }
-    } else {
-      setIsHistoryLoading(true);
-      setTimeout(() => {
-        setHistory(isShockActive ? mockHistoryEntries : [mockHistoryEntries[0]]);
-        setIsHistoryLoading(false);
-      }, 200);
     }
   };
 
-  // Inspect Counterfactual Parameter Sweep
-  const handleInspectCounterfactual = async (invoiceId: string) => {
-    setIsCounterfactualLoading(true);
-    setCounterfactualData(null);
-
-    if (mode === 'live') {
-      try {
-        const data = await api.getCounterfactual(invoiceId);
-        setCounterfactualData(data);
-      } catch (err: unknown) {
-        const msg = err instanceof ApiError ? err.message : `Failed to fetch counterfactual sweep for ${invoiceId}`;
-        setApiError(msg);
-        // Fallback to mock sweep data if available
-        if (mockCounterfactuals[invoiceId]) {
-          setCounterfactualData(mockCounterfactuals[invoiceId]);
-        }
-      } finally {
-        setIsCounterfactualLoading(false);
+  // Optional Voice Briefing
+  const handlePlayVoiceBriefing = async () => {
+    if (isVoiceLoading) return;
+    setIsVoiceLoading(true);
+    try {
+      // Speech synthesis fallback / optional backend voice endpoint
+      if ('speechSynthesis' in window) {
+        const text = isShockActive
+          ? "Customer Beta's payment was delayed from Day 9 to Day 20. To prevent a breach of your 500,000 rupee safety buffer on Day 12, TREVO has automatically updated your strategy for Invoice B to Bank Financing."
+          : "Portfolio strategy optimized. Invoice A uses bank financing for discount capture, Invoice B utilizes a 5-day delay, and Invoice C uses supplier financing.";
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
       }
-    } else {
-      // Demo Mode deterministic mock counterfactual sweep
-      setTimeout(() => {
-        const mockData = mockCounterfactuals[invoiceId] || {
-          invoice_id: invoiceId,
-          parameter_name: 'Interest / Discount Rate',
-          points: [
-            { parameter_value: 0.05, optimal_action: 'PAY_NOW', cost: 1000, feasible: true },
-            { parameter_value: 0.10, optimal_action: 'BANK_FINANCE', cost: 2000, feasible: true }
-          ]
-        };
-        setCounterfactualData(mockData);
-        setIsCounterfactualLoading(false);
-      }, 250);
+    } catch {
+      // Non-blocking voice failure
+    } finally {
+      setIsVoiceLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-[#F6FAF7] text-[#0F2E22] flex flex-col justify-between">
       {/* Header */}
-      <Header 
-        mode={mode} 
-        isOptimizerReady={true} 
-        onRefreshLive={loadInitialData}
+      <TrevoHeader
+        mode={mode}
+        onRefresh={loadInitialData}
         isRefreshing={isLoading || isInitialLoading}
+        showNewStrategy={activeTab === 'HISTORY'}
       />
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex-1 space-y-6">
-        {/* Error Notice */}
+      {/* Main Content Viewport */}
+      <main className="flex-1 w-full">
         {apiError && (
-          <ErrorBanner message={apiError} onRetry={loadInitialData} />
+          <div className="max-w-6xl mx-auto px-6 mb-4">
+            <ErrorBanner message={apiError} onRetry={loadInitialData} />
+          </div>
         )}
 
         {isInitialLoading ? (
-          <DashboardSkeleton />
+          <div className="max-w-6xl mx-auto px-6 pt-8">
+            <DashboardSkeleton />
+          </div>
+        ) : selectedDecision ? (
+          <DecisionDetailPage
+            decision={selectedDecision}
+            onBack={() => setSelectedDecision(null)}
+            counterfactualData={counterfactualData}
+            onPlayVoiceBriefing={handlePlayVoiceBriefing}
+            isVoiceLoading={isVoiceLoading}
+          />
+        ) : activeTab === 'OVERVIEW' ? (
+          <OverviewPage
+            businessState={businessState}
+            decisionPlan={decisionPlan}
+            isShockActive={isShockActive}
+            onSimulateEvent={handleSimulateEvent}
+            onReset={handleReset}
+            isLoading={isLoading}
+            onSelectDecision={handleSelectDecision}
+            onNavigateDecisions={() => setActiveTab('DECISIONS')}
+          />
+        ) : activeTab === 'DECISIONS' ? (
+          <DecisionsPage
+            businessState={businessState}
+            decisionPlan={decisionPlan}
+            isShockActive={isShockActive}
+            onBackToOverview={() => setActiveTab('OVERVIEW')}
+            onSelectDecision={handleSelectDecision}
+          />
         ) : (
-          <>
-            {/* Section 2: Summary Cards */}
-            <SummaryCards businessState={businessState} />
-
-            {/* Section 6: Optimal Joint Decision Plan */}
-            <DecisionSummary 
-              plan={decisionPlan} 
-              previousCost={previousCost} 
-            />
-
-            {/* Section 7: Event Simulator Controls */}
-            <EventSimulator
-              onSimulateShock={handleSimulateShock}
-              onReset={handleReset}
-              isShockActive={isShockActive}
-              isLoading={isLoading}
-            />
-
-            {/* Section 3: Payables Table */}
-            <PayablesTable
-              payables={businessState.payables}
-              decisions={decisionPlan.decisions}
-              onInspectCounterfactual={handleInspectCounterfactual}
-            />
-
-            {/* Section 4: Receivables Table */}
-            <ReceivablesTable
-              receivables={businessState.receivables}
-              shockActive={isShockActive}
-            />
-
-            {/* Section 5: Financing & Obligations */}
-            <FinancingSummary
-              financing={businessState.financing}
-              obligations={businessState.obligations}
-            />
-
-            {/* Section 11: History Section */}
-            <HistoryPanel
-              history={history}
-              isOpen={isHistoryOpen}
-              onToggle={() => setIsHistoryOpen(!isHistoryOpen)}
-              onRefresh={handleRefreshHistory}
-              isLoading={isHistoryLoading}
-            />
-          </>
+          <HistoryPage
+            history={history}
+            onRefresh={loadInitialData}
+            isLoading={isLoading}
+          />
         )}
       </main>
 
-      {/* Counterfactual Parameter Sweep Modal */}
-      <CounterfactualInspector
-        data={counterfactualData}
-        isLoading={isCounterfactualLoading}
-        onClose={() => setCounterfactualData(null)}
-      />
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-slate-950/40 px-4 sm:px-8 py-4 mt-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-300">TREVO Core</span>
-            <span>•</span>
-            <span>CSI Origin 2026</span>
-            <span>•</span>
-            <span className="text-slate-400">Orion Components Pvt Ltd</span>
-          </div>
-          <div className="font-mono text-slate-400 text-[11px]">
-            Branch: <span className="text-blue-400">feat/frontend-core</span> (Arnesh)
-          </div>
-        </div>
-      </footer>
+      {/* Floating Bottom Navigation Bar */}
+      {!selectedDecision && (
+        <BottomNav
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            if (tab === 'DECISIONS') {
+              setHasUnviewedDecision(false);
+            }
+          }}
+          hasUnviewedDecision={hasUnviewedDecision}
+        />
+      )}
     </div>
   );
 };

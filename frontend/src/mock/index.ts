@@ -1,9 +1,9 @@
-import { 
+import type { 
   BusinessState, 
   DecisionPlan, 
   HistoryEntry, 
   CounterfactualResponse 
-} from '../types';
+} from '../types/index';
 
 export const baselineBusinessState: BusinessState = {
   cash: 1000000,
@@ -207,20 +207,20 @@ export const shockDecisionPlan: DecisionPlan = {
 export const mockHistoryEntries: HistoryEntry[] = [
   {
     id: "hist-001",
-    timestamp: "2026-08-28 10:00:00",
-    event_type: "INITIAL_OPTIMIZE",
-    description: "Initial portfolio baseline joint optimization",
-    total_cost: 5236,
-    decisions: baselineDecisionPlan.decisions
-  },
-  {
-    id: "hist-002",
-    timestamp: "2026-08-28 10:15:30",
+    timestamp: "Today, 09:42 AM",
     event_type: "RECEIVABLE_DELAY",
-    description: "AR-Y delayed to Day 20 (Beta ₹3,00,000)",
+    description: "Customer Beta payment delayed to Day 20",
     total_cost: 5795,
     cost_delta: 559,
     decisions: shockDecisionPlan.decisions
+  },
+  {
+    id: "hist-002",
+    timestamp: "Today, 08:15 AM",
+    event_type: "RATE_ARBITRAGE",
+    description: "Rate Arbitrage scheduled portfolio check",
+    total_cost: 5236,
+    decisions: baselineDecisionPlan.decisions
   }
 ];
 
@@ -242,8 +242,8 @@ export const mockCounterfactuals: Record<string, CounterfactualResponse> = {
     points: [
       { parameter_value: 0, optimal_action: "DELAY", cost: 2400, feasible: true, reason: "Baseline optimal" },
       { parameter_value: 5, optimal_action: "DELAY", cost: 2400, feasible: true },
-      { parameter_value: 10, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true, reason: "Buffer threshold breached" },
-      { parameter_value: 15, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true }
+      { parameter_value: 12, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true, reason: "Buffer threshold breached on Day 12" },
+      { parameter_value: 20, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true }
     ]
   },
   "INV-C": {
