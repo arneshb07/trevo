@@ -1,6 +1,6 @@
 """Data models for CapitalOps Decision Engine (Section 4.1 BusinessState Contract)."""
 
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -11,13 +11,32 @@ class Payable(BaseModel):
     amount: float = Field(..., gt=0, description="Monetary amount, must be greater than zero")
     due_day: int = Field(..., ge=0, description="Day index when the payable is due")
     discount_rate: float = Field(default=0.0, ge=0.0, description="Early payment discount rate (e.g. 0.02 for 2%)")
-    discount_deadline_day: int = Field(default=0, ge=0, description="Day by which early payment discount applies")
-    penalty_rate: float = Field(default=0.0, ge=0.0, description="Late payment penalty rate per day/period")
+    discount_deadline_day: Optional[int] = Field(default=None, description="Day by which early payment discount applies (optional)")
+    penalty_rate: Optional[float] = Field(default=None, description="Late payment penalty rate per day/period (optional)")
     max_delay_days: int = Field(default=0, ge=0, description="Maximum days payment can be delayed")
-    bank_rate: float = Field(default=0.0, ge=0.0, description="Interest rate for bank credit line financing")
-    supplier_rate: float = Field(default=0.0, ge=0.0, description="Interest rate for supplier/dynamic discounting financing")
+    bank_rate: Optional[float] = Field(default=None, description="Interest rate for bank credit line financing (optional)")
+    supplier_rate: Optional[float] = Field(default=None, description="Interest rate for supplier/dynamic discounting financing (optional)")
     fin_term_days: int = Field(default=0, ge=0, description="Financing repayment term in days")
-    importance: float = Field(default=1.0, ge=0.0, description="Strategic importance/priority weight of supplier")
+    importance: float = Field(default=1.0, ge=0.0, description="Strategic importance/priority weight of supplier (numeric internally)")
+
+    @field_validator("discount_deadline_day", "penalty_rate", "bank_rate", "supplier_rate", mode="before")
+    @classmethod
+    def validate_optional_non_negative(cls, value):
+        if value is not None and value < 0:
+            raise ValueError("Optional numeric fields must be non‑negative when provided")
+        return value
+
+    @field_validator("importance", mode="before")
+    @classmethod
+    def map_importance(cls, v):
+        if isinstance(v, (int, float)):
+            return float(v)
+        mapping = {"HIGH": 3.0, "MEDIUM": 2.0, "LOW": 1.0}
+        if isinstance(v, str):
+            key = v.upper()
+            if key in mapping:
+                return mapping[key]
+        raise ValueError(f"importance must be one of HIGH, MEDIUM, LOW or a numeric weight; got {v!r}")
 
     @field_validator("amount")
     @classmethod
