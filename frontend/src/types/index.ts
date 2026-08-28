@@ -40,9 +40,10 @@ export interface Obligation {
 }
 
 export interface FinancingFacility {
-  id: string;
-  type: 'BANK' | 'SUPPLIER';
-  provider: string;
+  id?: string;
+  type?: 'BANK' | 'SUPPLIER';
+  provider?: string;
+  source?: string;
   limit: number;
   rate: number;
 }
@@ -59,6 +60,106 @@ export interface BusinessState {
   expected_cash_flow_trace?: CashTracePoint[];
   conservative_cash_flow_trace?: CashTracePoint[];
   buffer_12days?: BufferStatus;
+}
+
+export interface TracePoint {
+  day: number;
+  starting_cash: number;
+  inflow: number;
+  outflow: number;
+  net_flow: number;
+  ending_cash: number;
+  buffer: number;
+  is_solvent: boolean;
+}
+
+export interface CashTrace {
+  scenario: 'EXPECTED' | 'CONSERVATIVE' | string;
+  checkpoints: number[];
+  points: TracePoint[];
+  min_cash: number;
+  min_solvency_margin: number;
+  has_shortfall: boolean;
+}
+
+export interface EngineAlternative {
+  action: ActionType;
+  is_eligible: boolean;
+  ineligibility_reason?: string | null;
+  action_cost: number;
+  net_savings: number;
+  is_selected: boolean;
+}
+
+export interface EngineInvoiceDecision {
+  payable_id: string;
+  nominal_amount: number;
+  due_day: number;
+  selected_action: ActionType;
+  feasibility: boolean;
+  cost: number;
+  net_savings: number;
+  immediate_outflow: number;
+  payment_day: number;
+  repayment_amount: number | null;
+  repayment_day: number | null;
+  cash_before: number;
+  cash_after: number;
+  required_buffer: number;
+  alternatives: EngineAlternative[];
+  binding_constraints: string[];
+  reason_codes: string[];
+}
+
+export interface DecisionEngineSummary {
+  total_invoices: number;
+  total_face_value: number;
+  total_optimized_cost: number;
+  net_portfolio_savings: number;
+  total_bank_drawn: number;
+  total_supplier_drawn: number;
+  min_conservative_cash: number;
+  buffer: number;
+}
+
+export interface DecisionEngineResponse {
+  status: string;
+  is_feasible: boolean;
+  total_cost: number;
+  summary: DecisionEngineSummary;
+  invoices: Record<string, EngineInvoiceDecision>;
+  conservative_trace?: CashTrace;
+  expected_trace?: CashTrace;
+  global_binding_constraints?: string[];
+  global_reason_codes?: string[];
+}
+
+export interface EventEngineResponse {
+  status: string;
+  message: string;
+  event: { invoice_id: string; new_day: number; type: string };
+  previous_decisions: DecisionEngineResponse;
+  new_decisions: DecisionEngineResponse;
+  changes: Array<{
+    invoice_id: string;
+    old_action: ActionType;
+    new_action: ActionType;
+    old_cost: number;
+    new_cost: number;
+    cost_delta: number;
+  }>;
+  old_day: number;
+  new_day: number;
+}
+
+export interface HistoryApiResponse {
+  history: Array<{
+    id: number;
+    event_id: number;
+    previous_plan: DecisionEngineResponse;
+    new_plan: DecisionEngineResponse;
+    created_at: string;
+  }>;
 }
 
 export interface CashTracePoint {
@@ -114,6 +215,8 @@ export interface FinancialEvent {
   type: EventType;
   receivable_id?: string;
   new_expected_day?: number;
+  invoice_id?: string;
+  new_day?: number;
   payable?: Payable;
   amount?: number;
   day?: number;
@@ -135,6 +238,8 @@ export interface HistoryEntry {
   total_cost: number;
   cost_delta?: number;
   decisions: Decision[];
+  previous_plan?: DecisionPlan;
+  new_plan?: DecisionPlan;
 }
 
 export interface CounterfactualPoint {
@@ -206,6 +311,15 @@ export interface SummaryMetricsViewModel {
   riskStatus: string;
   optimizationCost: number;
   optimizationCostFormatted: string;
+  totalFaceValue?: number;
+  netPortfolioSavings?: number;
+  totalBankDrawn?: number;
+  totalSupplierDrawn?: number;
+  minConservativeCash?: number;
+  minSolvencyMargin?: number;
+  hasShortfall?: boolean;
+  globalBindingConstraints?: string[];
+  globalReasonCodes?: string[];
 }
 
 export interface DecisionReasoningStep {

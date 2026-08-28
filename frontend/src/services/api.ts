@@ -2,11 +2,12 @@ import {
   BusinessState, 
   Decision, 
   FinancialEvent, 
-  EventResponse, 
-  HistoryEntry, 
   CounterfactualResponse,
   ApiErrorResponse,
   VoiceExplanationResponse
+  ,DecisionEngineResponse,
+  EventEngineResponse,
+  HistoryApiResponse
 } from '../types';
 
 export class ApiError extends Error {
@@ -102,15 +103,15 @@ class ApiService {
   /**
    * Fetch current optimizer decisions (GET /decisions)
    */
-  async getDecisions(): Promise<Decision[]> {
-    return this.request<Decision[]>('/decisions');
+  async getDecisions(): Promise<DecisionEngineResponse> {
+    return this.request<DecisionEngineResponse>('/decisions');
   }
 
   /**
    * Post a financial shock / event to trigger re-optimization (POST /events)
    */
-  async postEvent(event: FinancialEvent): Promise<EventResponse> {
-    return this.request<EventResponse>('/events', {
+  async postEvent(event: FinancialEvent): Promise<EventEngineResponse> {
+    return this.request<EventEngineResponse>('/events', {
       method: 'POST',
       body: JSON.stringify(event),
     });
@@ -128,8 +129,8 @@ class ApiService {
   /**
    * Fetch decision & event history (GET /history)
    */
-  async getHistory(): Promise<HistoryEntry[]> {
-    return this.request<HistoryEntry[]>('/history');
+  async getHistory(): Promise<HistoryApiResponse> {
+    return this.request<HistoryApiResponse>('/history');
   }
 
   /**

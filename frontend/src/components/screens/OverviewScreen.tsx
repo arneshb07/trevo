@@ -20,7 +20,7 @@ interface OverviewScreenProps {
   metrics: SummaryMetricsViewModel;
   invoices: InvoiceViewModel[];
   businessState: BusinessState;
-  onRunSimulation: (day: number) => void;
+  onRunSimulation: (day: number, receivableId: string) => void;
   isSimulationLoading: boolean;
   simulationError?: string;
 }
@@ -36,6 +36,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   const [activeSegment, setActiveSegment] = useState<'payables' | 'receivables' | 'financing'>('payables');
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>('inv-b');
   const [simulationDay, setSimulationDay] = useState<number>(9);
+  const [selectedReceivableId, setSelectedReceivableId] = useState<string>(businessState.receivables[0]?.id || '');
 
   const toggleExpand = (id: string) => {
     setExpandedInvoiceId((prev) => (prev === id ? null : id));
@@ -100,6 +101,21 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           <div className="metric-value">{metrics.optimizationCostFormatted}</div>
         </div>
       </div>
+
+      {(metrics.totalFaceValue !== undefined || metrics.minConservativeCash !== undefined) && (
+        <div className="engine-summary-strip">
+          <div><span>Total face value</span><strong>{metrics.totalFaceValue !== undefined ? formatRupees(metrics.totalFaceValue) : 'Not available'}</strong></div>
+          <div><span>Minimum conservative cash</span><strong>{metrics.minConservativeCash !== undefined ? formatRupees(metrics.minConservativeCash) : 'Not available'}</strong></div>
+          <div><span>Solvency margin</span><strong>{metrics.minSolvencyMargin !== undefined ? formatRupees(metrics.minSolvencyMargin) : 'Not available'}</strong></div>
+          <div><span>Portfolio status</span><strong>{metrics.hasShortfall === undefined ? 'Not available' : metrics.hasShortfall ? 'Shortfall detected' : 'Feasible'}</strong></div>
+        </div>
+      )}
+      {(metrics.globalBindingConstraints?.length || metrics.globalReasonCodes?.length) && (
+        <div className="engine-notes">
+          {metrics.globalBindingConstraints?.length ? <div><strong>Binding constraints</strong><span>{metrics.globalBindingConstraints.map(formatEngineTerm).join(' · ')}</span></div> : null}
+          {metrics.globalReasonCodes?.length ? <div><strong>Decision reasons</strong><span>{metrics.globalReasonCodes.map(formatEngineTerm).join(' · ')}</span></div> : null}
+        </div>
+      )}
 
       {/* Working Capital Position Card */}
       <div className="liquid-card content-card">
@@ -262,7 +278,9 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
 
           <div className="simulate-controls-box">
             <div className="simulate-customer-row">
-              <span className="customer-name">Customer Beta</span>
+              <select className="simulation-select" value={selectedReceivableId} onChange={(event) => setSelectedReceivableId(event.target.value)} aria-label="Receivable to delay">
+                {businessState.receivables.map((receivable) => <option key={receivable.id} value={receivable.id}>{receivable.id} · {receivable.customer || 'Customer'}</option>)}
+              </select>
               <span className="day-display">Day {simulationDay}</span>
             </div>
 
@@ -294,7 +312,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => onRunSimulation(simulationDay)}
+                onClick={() => onRunSimulation(simulationDay, selectedReceivableId)}
                 disabled={isSimulationLoading}
               >
                 {isSimulationLoading ? 'Reassessing...' : 'Run Simulation'}

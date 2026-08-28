@@ -6,17 +6,20 @@ export function formatRupees(amount: number | null | undefined): string {
     return '₹0';
   }
   const isNegative = amount < 0;
-  const absAmount = Math.abs(Math.round(amount));
+  const absAmount = Math.abs(amount);
+  const roundedAmount = Math.round(absAmount * 100) / 100;
+  const integerPart = Math.floor(roundedAmount);
+  const decimalPart = roundedAmount % 1 === 0 ? '' : `.${Math.round((roundedAmount % 1) * 100).toString().padStart(2, '0')}`;
 
   // Format according to Indian numbering system (lakhs/crores)
-  const str = absAmount.toString();
+  const str = integerPart.toString();
   let lastThree = str.substring(str.length - 3);
   const otherNumbers = str.substring(0, str.length - 3);
   if (otherNumbers !== '') {
     lastThree = ',' + lastThree;
   }
   const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + lastThree;
-  return `${isNegative ? '-' : ''}₹${formatted}`;
+  return `${isNegative ? '-' : ''}₹${formatted}${decimalPart}`;
 }
 
 /**

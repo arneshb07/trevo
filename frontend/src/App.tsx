@@ -4,6 +4,7 @@ import {
   BusinessState,
   DecisionPlan,
   HistoryEntry,
+  DecisionEngineResponse,
 } from './types';
 import {
   baselineBusinessState,
@@ -18,6 +19,10 @@ import {
   getInvoiceViewModels,
   getDecisionUpdateViewModel,
   getHistoryViewModels,
+  engineToDecisionPlan,
+  engineToForecastMilestones,
+  normalizeBusinessState,
+  historyApiToEntries,
 } from './adapters/viewModelAdapters';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/navigation/BottomNav';
@@ -28,7 +33,9 @@ import { HistoryScreen } from './components/screens/HistoryScreen';
 export function App() {
   // Canonical State from origin/feat/frontend-core
   const [businessState, setBusinessState] = useState<BusinessState>(baselineBusinessState);
+  const [engineResponse, setEngineResponse] = useState<DecisionEngineResponse | null>(null);
   const [decisionPlan, setDecisionPlan] = useState<DecisionPlan>(baselineDecisionPlan);
+  const [comparisonPlan, setComparisonPlan] = useState<DecisionPlan>(baselineDecisionPlan);
   const [history, setHistory] = useState<HistoryEntry[]>(mockHistoryEntries);
   const [mode, setMode] = useState<'live' | 'demo'>('demo');
   const [hasDecisionChange, setHasDecisionChange] = useState(false);
@@ -51,20 +58,18 @@ export function App() {
       const state = await api.getState();
       const decisions = await api.getDecisions();
 
-      if (state && Array.isArray(decisions)) {
-        setBusinessState(state);
-        setDecisionPlan({
-          decisions,
-          total_cost: decisions.reduce((sum, d) => sum + (d.cost || 0), 0),
-          timestamp: new Date().toISOString(),
-        });
-        setHasDecisionChange(decisions.some((decision) => baselineDecisionPlan.decisions.find((baseline) => baseline.invoice_id === decision.invoice_id)?.selected_action !== decision.selected_action));
+      if (state && decisions && decisions.invoices) {
+        setBusinessState(normalizeBusinessState(state));
+        setEngineResponse(decisions);
+        setDecisionPlan(engineToDecisionPlan(decisions));
+        setComparisonPlan(engineToDecisionPlan(decisions));
+        setHasDecisionChange(Object.values(decisions.invoices).some((decision) => baselineDecisionPlan.decisions.find((baseline) => baseline.invoice_id === decision.payable_id)?.selected_action !== decision.selected_action));
         setMode('live');
 
         try {
           const remoteHistory = await api.getHistory();
-          if (Array.isArray(remoteHistory)) {
-            setHistory(remoteHistory);
+          if (remoteHistory && Array.isArray(remoteHistory.history)) {
+            setHistory(historyApiToEntries(remoteHistory));
           }
         } catch {
           // Graceful fallback for history
@@ -84,40 +89,32 @@ export function App() {
   }, [loadInitialData]);
 
   // Handle Event Simulation (Shock)
-  const handleRunSimulation = async (day: number) => {
+  const handleRunSimulation = async (day: number, receivableId: string) => {
     setIsSimulationLoading(true);
     setSimulationError(undefined);
 
     if (mode === 'live') {
       try {
-        const previousPlan = decisionPlan;
         const response = await api.postEvent({
           type: 'RECEIVABLE_DELAY',
-          receivable_id: 'AR-Y',
-          new_expected_day: day,
+          invoice_id: receivableId,
+          new_day: day,
         });
 
-        if (!response.new_plan) {
+        if (!response.new_decisions) {
           throw new Error('Event response did not include an updated plan.');
         }
 
-        setDecisionPlan(response.new_plan);
-        setHasDecisionChange(response.changed_decisions?.length > 0 || response.new_plan.decisions.some((decision) => previousPlan.decisions.find((previous) => previous.invoice_id === decision.invoice_id)?.selected_action !== decision.selected_action));
-        if (response.updated_state) {
-          setBusinessState(response.updated_state);
-        } else {
-          setBusinessState((prev) => ({
-            ...prev,
-            receivables: prev.receivables.map((r) =>
-              r.id === 'AR-Y' ? { ...r, expected_day: day, late_day: day } : r
-            ),
-          }));
-        }
+        setEngineResponse(response.new_decisions);
+        setComparisonPlan(engineToDecisionPlan(response.previous_decisions));
+        setDecisionPlan(engineToDecisionPlan(response.new_decisions));
+        setHasDecisionChange(response.changes.length > 0);
+        setBusinessState(normalizeBusinessState(await api.getState()));
 
         try {
           const updatedHistory = await api.getHistory();
-          if (Array.isArray(updatedHistory)) {
-            setHistory(updatedHistory);
+          if (updatedHistory && Array.isArray(updatedHistory.history)) {
+            setHistory(historyApiToEntries(updatedHistory));
           }
         } catch {
           // Keep current history
@@ -132,6 +129,7 @@ export function App() {
       // Demo Mode deterministic transition
       setBusinessState(shockBusinessState);
       setDecisionPlan(shockDecisionPlan);
+      setComparisonPlan(baselineDecisionPlan);
       setHasDecisionChange(true);
     }
 
@@ -146,7 +144,6 @@ export function App() {
 
     if (mode === 'live') {
       try {
-        await api.postOptimize();
         await loadInitialData();
         setHasDecisionChange(false);
       } catch {
@@ -156,6 +153,7 @@ export function App() {
     } else {
       setBusinessState(baselineBusinessState);
       setDecisionPlan(baselineDecisionPlan);
+      setComparisonPlan(baselineDecisionPlan);
       setHasDecisionChange(false);
     }
   };
@@ -192,13 +190,17 @@ export function App() {
   };
 
   // Compute ViewModels from Canonical State
-  const summaryMetricsVM = getSummaryMetricsViewModel(businessState, decisionPlan);
+  const summaryMetricsVM = getSummaryMetricsViewModel(businessState, decisionPlan, engineResponse || undefined);
   const invoiceVMs = getInvoiceViewModels(businessState, decisionPlan);
   const decisionUpdateVM = getDecisionUpdateViewModel(
-    baselineDecisionPlan,
+    comparisonPlan,
     decisionPlan,
     businessState
   );
+  if (engineResponse) {
+    decisionUpdateVM.forecastMilestones = engineToForecastMilestones(engineResponse);
+    decisionUpdateVM.liquidityBuffer = engineResponse.summary.buffer;
+  }
   const historyVMs = getHistoryViewModels(history);
 
   return (

@@ -6,6 +6,9 @@ import {
   SummaryMetricsViewModel,
   DecisionUpdateViewModel,
   HistoryViewModel,
+  DecisionEngineResponse,
+  EngineInvoiceDecision,
+  HistoryApiResponse,
 } from '../types';
 import { formatRupees, formatPercent, formatEngineTerm, formatEngineExplanation, getActionLabel } from '../utils/formatters';
 
@@ -14,17 +17,99 @@ import { formatRupees, formatPercent, formatEngineTerm, formatEngineExplanation,
  */
 export function getSummaryMetricsViewModel(
   state: BusinessState,
-  plan: DecisionPlan
+  plan: DecisionPlan,
+  engineResponse?: DecisionEngineResponse
 ): SummaryMetricsViewModel {
   return {
     availableCash: state.cash,
     availableCashFormatted: formatRupees(state.cash),
     protectedLiquidity: state.buffer,
     protectedLiquidityFormatted: formatRupees(state.buffer),
-    riskStatus: 'Not available',
+    riskStatus: engineResponse ? (engineResponse.is_feasible ? 'SAFE' : 'AT RISK') : 'Not available',
     optimizationCost: plan.total_cost,
     optimizationCostFormatted: formatRupees(plan.total_cost),
+    totalFaceValue: engineResponse?.summary.total_face_value,
+    netPortfolioSavings: engineResponse?.summary.net_portfolio_savings,
+    totalBankDrawn: engineResponse?.summary.total_bank_drawn,
+    totalSupplierDrawn: engineResponse?.summary.total_supplier_drawn,
+    minConservativeCash: engineResponse?.summary.min_conservative_cash,
+    minSolvencyMargin: engineResponse?.conservative_trace?.min_solvency_margin,
+    hasShortfall: engineResponse?.conservative_trace?.has_shortfall,
+    globalBindingConstraints: engineResponse?.global_binding_constraints,
+    globalReasonCodes: engineResponse?.global_reason_codes,
   };
+}
+
+export function engineToDecisionPlan(response: DecisionEngineResponse): DecisionPlan {
+  return {
+    total_cost: response.total_cost,
+    timestamp: new Date().toISOString(),
+    decisions: Object.values(response.invoices).map((invoice: EngineInvoiceDecision) => ({
+      invoice_id: invoice.payable_id,
+      selected_action: invoice.selected_action,
+      cost: invoice.cost,
+      execution_day: invoice.payment_day,
+      binding_constraint: invoice.binding_constraints?.[0],
+      reason: invoice.reason_codes?.map((code) => formatEngineTerm(code)).join(', '),
+      immediate_outflow: invoice.immediate_outflow,
+      repayment_amount: invoice.repayment_amount || undefined,
+      repayment_day: invoice.repayment_day || undefined,
+      cash_before: invoice.cash_before,
+      cash_after: invoice.cash_after,
+      required_buffer: invoice.required_buffer,
+      alternatives: invoice.alternatives?.map((alternative) => ({
+        action: alternative.action,
+        cost: alternative.action_cost,
+        feasible: alternative.is_eligible,
+        reason: alternative.ineligibility_reason || undefined,
+      })),
+      reason_codes: invoice.reason_codes,
+    })),
+  };
+}
+
+export function normalizeBusinessState(state: BusinessState): BusinessState {
+  return {
+    ...state,
+    obligations: state.obligations.map((obligation, index) => ({
+      ...obligation,
+      id: obligation.id || `obligation-${index}`,
+      name: obligation.name || 'Fixed obligation',
+    })),
+    financing: state.financing.map((facility, index) => ({
+      ...facility,
+      id: facility.id || facility.source || `facility-${index}`,
+      type: facility.type || (facility.source === 'BANK' ? 'BANK' : 'SUPPLIER'),
+      provider: facility.provider || facility.source || 'Financing facility',
+    })),
+  };
+}
+
+export function engineToForecastMilestones(response: DecisionEngineResponse): import('../types').ForecastMilestone[] {
+  const expected = response.expected_trace?.points || [];
+  const conservative = response.conservative_trace?.points || [];
+  const days = Array.from(new Set([...expected, ...conservative].map((point) => point.day))).sort((a, b) => a - b);
+  return days.map((day) => ({
+    day,
+    dayLabel: `Day ${day}`,
+    expectedAmount: expected.find((point) => point.day === day)?.ending_cash,
+    conservativeAmount: conservative.find((point) => point.day === day)?.ending_cash,
+    bufferAmount: conservative.find((point) => point.day === day)?.buffer || expected.find((point) => point.day === day)?.buffer,
+  }));
+}
+
+export function historyApiToEntries(response: HistoryApiResponse): HistoryEntry[] {
+  return response.history.map((entry) => ({
+    id: String(entry.id),
+    timestamp: entry.created_at,
+    event_type: 'REOPTIMIZATION',
+    description: `Event ${entry.event_id} recalculated the portfolio`,
+    total_cost: entry.new_plan.total_cost,
+    cost_delta: entry.new_plan.total_cost - entry.previous_plan.total_cost,
+    decisions: engineToDecisionPlan(entry.new_plan).decisions,
+    previous_plan: engineToDecisionPlan(entry.previous_plan),
+    new_plan: engineToDecisionPlan(entry.new_plan),
+  }));
 }
 
 /**
@@ -195,8 +280,10 @@ export function getDecisionUpdateViewModel(
 export function getHistoryViewModels(entries: HistoryEntry[]): HistoryViewModel[] {
   return entries.map((entry, index) => {
     const priorEntry = entries[index + 1];
-    const currentDecision = entry.decisions.find((decision) => decision.invoice_id.includes('B'));
-    const priorDecision = priorEntry?.decisions.find((decision) => decision.invoice_id.includes('B'));
+    const currentDecision = entry.new_plan?.decisions.find((decision) => entry.previous_plan?.decisions.find((previous) => previous.invoice_id === decision.invoice_id)?.selected_action !== decision.selected_action)
+      || entry.decisions.find((decision) => decision.invoice_id.includes('B'));
+    const priorDecision = entry.previous_plan?.decisions.find((decision) => decision.invoice_id === currentDecision?.invoice_id)
+      || priorEntry?.decisions.find((decision) => decision.invoice_id === currentDecision?.invoice_id);
     const didPivot = currentDecision && priorDecision && currentDecision.selected_action !== priorDecision.selected_action;
     const shift = entry.event_type === 'RECEIVABLE_DELAY'
       ? didPivot
