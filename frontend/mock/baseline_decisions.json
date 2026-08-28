@@ -1,0 +1,45 @@
+{
+  "total_cost": 5236,
+  "decisions": [
+    {
+      "invoice_id": "INV-A",
+      "selected_action": "BANK_FINANCE",
+      "cost": 1973,
+      "execution_day": 2,
+      "binding_constraint": "BANK_LIMIT",
+      "reason": "Bank finance captures 3% early payment discount at Day 2 with net interest benefit",
+      "alternatives": [
+        { "action": "PAY_NOW", "cost": 0, "feasible": true },
+        { "action": "PAY_MATURITY", "cost": 6000, "feasible": true },
+        { "action": "BANK_FINANCE", "cost": 1973, "feasible": true },
+        { "action": "DELAY", "cost": 0, "feasible": false, "reason": "Delay not permitted" }
+      ]
+    },
+    {
+      "invoice_id": "INV-B",
+      "selected_action": "DELAY",
+      "cost": 2400,
+      "execution_day": 12,
+      "binding_constraint": "LIQUIDITY_BUFFER",
+      "reason": "5-day delay is optimal under baseline cash flow with 0.8% penalty",
+      "alternatives": [
+        { "action": "DELAY", "cost": 2400, "feasible": true },
+        { "action": "BANK_FINANCE", "cost": 2959, "feasible": true },
+        { "action": "PAY_MATURITY", "cost": 0, "feasible": false, "reason": "Violates conservative buffer at Day 7" }
+      ]
+    },
+    {
+      "invoice_id": "INV-C",
+      "selected_action": "SUPPLIER_FINANCE",
+      "cost": 863,
+      "execution_day": 10,
+      "binding_constraint": "SUPPLIER_LIMIT",
+      "reason": "Supplier C financing utilized at 7% annual interest",
+      "alternatives": [
+        { "action": "SUPPLIER_FINANCE", "cost": 863, "feasible": true },
+        { "action": "BANK_FINANCE", "cost": 1479, "feasible": true },
+        { "action": "DELAY", "cost": 0, "feasible": false, "reason": "Delay not permitted" }
+      ]
+    }
+  ]
+}
