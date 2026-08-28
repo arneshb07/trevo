@@ -1,0 +1,43 @@
+{
+  "total_cost": 5795,
+  "cost_delta": 559,
+  "decisions": [
+    {
+      "invoice_id": "INV-A",
+      "selected_action": "BANK_FINANCE",
+      "cost": 1973,
+      "execution_day": 2,
+      "binding_constraint": "BANK_LIMIT",
+      "reason": "Retains bank financing to secure 3% early discount",
+      "alternatives": [
+        { "action": "PAY_NOW", "cost": 0, "feasible": true },
+        { "action": "BANK_FINANCE", "cost": 1973, "feasible": true }
+      ]
+    },
+    {
+      "invoice_id": "INV-B",
+      "selected_action": "BANK_FINANCE",
+      "cost": 2959,
+      "execution_day": 7,
+      "binding_constraint": "LIQUIDITY_BUFFER",
+      "reason": "Switched from DELAY to BANK_FINANCE because AR-Y delay to Day 20 renders DELAY infeasible against conservative liquidity buffer at Day 12",
+      "alternatives": [
+        { "action": "BANK_FINANCE", "cost": 2959, "feasible": true },
+        { "action": "DELAY", "cost": 2400, "feasible": false, "reason": "Buffer shortfall ₹2,00,000 at Day 12" },
+        { "action": "PAY_MATURITY", "cost": 0, "feasible": false, "reason": "Buffer shortfall at Day 7" }
+      ]
+    },
+    {
+      "invoice_id": "INV-C",
+      "selected_action": "SUPPLIER_FINANCE",
+      "cost": 863,
+      "execution_day": 10,
+      "binding_constraint": "SUPPLIER_LIMIT",
+      "reason": "Supplier financing remains optimal and isolated from bank facility",
+      "alternatives": [
+        { "action": "SUPPLIER_FINANCE", "cost": 863, "feasible": true },
+        { "action": "BANK_FINANCE", "cost": 1479, "feasible": true }
+      ]
+    }
+  ]
+}

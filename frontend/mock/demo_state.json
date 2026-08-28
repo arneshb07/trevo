@@ -1,0 +1,87 @@
+{
+  "cash": 1000000,
+  "buffer": 500000,
+  "payables": [
+    {
+      "id": "INV-A",
+      "vendor": "Supplier A",
+      "amount": 200000,
+      "due_day": 5,
+      "discount_rate": 0.03,
+      "discount_deadline_day": 2,
+      "max_delay_days": 0,
+      "penalty_rate": 0,
+      "bank_rate": 0.12,
+      "supplier_rate": 0,
+      "importance": "MEDIUM"
+    },
+    {
+      "id": "INV-B",
+      "vendor": "Supplier B",
+      "amount": 300000,
+      "due_day": 7,
+      "discount_rate": 0,
+      "discount_deadline_day": 0,
+      "max_delay_days": 5,
+      "penalty_rate": 0.008,
+      "bank_rate": 0.12,
+      "supplier_rate": 0,
+      "importance": "LOW"
+    },
+    {
+      "id": "INV-C",
+      "vendor": "Supplier C",
+      "amount": 150000,
+      "due_day": 10,
+      "discount_rate": 0,
+      "discount_deadline_day": 0,
+      "max_delay_days": 0,
+      "penalty_rate": 0,
+      "bank_rate": 0,
+      "supplier_rate": 0.07,
+      "importance": "HIGH"
+    }
+  ],
+  "receivables": [
+    {
+      "id": "AR-X",
+      "customer": "Alpha",
+      "amount": 500000,
+      "expected_day": 4,
+      "p_ontime": 0.80,
+      "late_day": 14
+    },
+    {
+      "id": "AR-Y",
+      "customer": "Beta",
+      "amount": 300000,
+      "expected_day": 9,
+      "p_ontime": 0.90,
+      "late_day": 16
+    }
+  ],
+  "obligations": [
+    {
+      "id": "PAYROLL",
+      "name": "Payroll",
+      "amount": 400000,
+      "day": 6
+    }
+  ],
+  "financing": [
+    {
+      "id": "BANK_FACILITY",
+      "type": "BANK",
+      "provider": "Bank",
+      "limit": 500000,
+      "rate": 0.12
+    },
+    {
+      "id": "SUPPLIER_C_FACILITY",
+      "type": "SUPPLIER",
+      "provider": "Supplier C",
+      "limit": 200000,
+      "rate": 0.07
+    }
+  ]
+}
