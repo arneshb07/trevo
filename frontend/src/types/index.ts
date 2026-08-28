@@ -1,3 +1,5 @@
+// Canonical Types from origin/feat/frontend-core
+
 export type ImportanceLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type ActionType = 
@@ -128,4 +130,89 @@ export interface ApiErrorResponse {
   detail?: string;
   message?: string;
   status_code?: number;
+}
+
+// UI Navigation & View Specific Types
+
+export type NavigationTab = 'overview' | 'decisions' | 'history';
+
+export interface InvoiceViewModel {
+  id: string;
+  name: string;
+  dueDate: string;
+  dueInDays?: number;
+  amount: number;
+  amountFormatted: string;
+  actionAssigned: ActionType;
+  status: 'SCHEDULED' | 'PROCESSING' | 'OVERDUE' | 'COMPLETED' | 'OPTIMIZED';
+  statusText?: string;
+  isOverdue?: boolean;
+  isUpdated?: boolean;
+  type?: 'payables' | 'receivables' | 'financing';
+  entity?: string;
+  details?: {
+    discountOffered?: string;
+    penaltyRate?: string;
+    financingCost?: string;
+    effectiveApr?: string;
+    recommendedActionNote?: string;
+  };
+}
+
+export interface SummaryMetricsViewModel {
+  availableCash: number;
+  availableCashFormatted: string;
+  protectedLiquidity: number;
+  protectedLiquidityFormatted: string;
+  riskStatus: 'SAFE' | 'AT_RISK' | 'CRITICAL';
+  optimizationCost: number;
+  optimizationCostFormatted: string;
+}
+
+export interface DecisionReasoningStep {
+  stepNumber: number;
+  title: string;
+  description: string;
+  type: 'event' | 'viability' | 'risk' | 'reopt' | 'outcome';
+  iconType: 'alert' | 'clock' | 'shield' | 'refresh' | 'check';
+}
+
+export interface ForecastMilestone {
+  day: number;
+  dayLabel: string;
+  expectedAmount: number;
+  bufferAmount: number;
+  isHighlighted?: boolean;
+  highlightLabel?: string;
+}
+
+export interface DecisionUpdateViewModel {
+  title: string;
+  subtitle: string;
+  tag: string;
+  previousPlan: {
+    target: string;
+    action: ActionType;
+  };
+  newOptimalPlan: {
+    target: string;
+    action: ActionType;
+  };
+  costDelta: string;
+  costDeltaRaw: number;
+  costDeltaDirection: 'up' | 'down';
+  reasoningSteps: DecisionReasoningStep[];
+  forecastMilestones: ForecastMilestone[];
+  actionPlanInvoices: InvoiceViewModel[];
+}
+
+export interface HistoryViewModel {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  title: string;
+  description: string;
+  strategyShift: string;
+  costImpact: string;
+  status: 'OPTIMIZED' | 'RESOLVED' | 'TRIGGERED';
 }

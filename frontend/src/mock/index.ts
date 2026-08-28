@@ -1,9 +1,9 @@
-import type { 
-  BusinessState, 
-  DecisionPlan, 
-  HistoryEntry, 
-  CounterfactualResponse 
-} from '../types/index';
+import {
+  BusinessState,
+  DecisionPlan,
+  HistoryEntry,
+  CounterfactualResponse
+} from '../types';
 
 export const baselineBusinessState: BusinessState = {
   cash: 1000000,
@@ -102,12 +102,30 @@ export const baselineDecisionPlan: DecisionPlan = {
       cost: 1973,
       execution_day: 2,
       binding_constraint: "BANK_LIMIT",
-      reason: "Bank finance captures 3% early payment discount at Day 2 with net interest benefit",
+      reason:
+        "Bank finance captures 3% early payment discount at Day 2 with net interest benefit",
       alternatives: [
-        { action: "PAY_NOW", cost: 0, feasible: true },
-        { action: "PAY_MATURITY", cost: 6000, feasible: true },
-        { action: "BANK_FINANCE", cost: 1973, feasible: true },
-        { action: "DELAY", cost: 0, feasible: false, reason: "Delay not permitted" }
+        {
+          action: "PAY_NOW",
+          cost: 0,
+          feasible: true
+        },
+        {
+          action: "PAY_MATURITY",
+          cost: 6000,
+          feasible: true
+        },
+        {
+          action: "BANK_FINANCE",
+          cost: 1973,
+          feasible: true
+        },
+        {
+          action: "DELAY",
+          cost: 0,
+          feasible: false,
+          reason: "Delay not permitted"
+        }
       ]
     },
     {
@@ -116,11 +134,25 @@ export const baselineDecisionPlan: DecisionPlan = {
       cost: 2400,
       execution_day: 12,
       binding_constraint: "LIQUIDITY_BUFFER",
-      reason: "5-day delay is optimal under baseline cash flow with 0.8% penalty",
+      reason:
+        "5-day delay is optimal under baseline cash flow with 0.8% penalty",
       alternatives: [
-        { action: "DELAY", cost: 2400, feasible: true },
-        { action: "BANK_FINANCE", cost: 2959, feasible: true },
-        { action: "PAY_MATURITY", cost: 0, feasible: false, reason: "Violates conservative buffer at Day 7" }
+        {
+          action: "DELAY",
+          cost: 2400,
+          feasible: true
+        },
+        {
+          action: "BANK_FINANCE",
+          cost: 2959,
+          feasible: true
+        },
+        {
+          action: "PAY_MATURITY",
+          cost: 0,
+          feasible: false,
+          reason: "Violates conservative buffer at Day 7"
+        }
       ]
     },
     {
@@ -129,11 +161,25 @@ export const baselineDecisionPlan: DecisionPlan = {
       cost: 863,
       execution_day: 10,
       binding_constraint: "SUPPLIER_LIMIT",
-      reason: "Supplier C financing utilized at 7% annual interest",
+      reason:
+        "Supplier C financing utilized at 7% annual interest",
       alternatives: [
-        { action: "SUPPLIER_FINANCE", cost: 863, feasible: true },
-        { action: "BANK_FINANCE", cost: 1479, feasible: true },
-        { action: "DELAY", cost: 0, feasible: false, reason: "Delay not permitted" }
+        {
+          action: "SUPPLIER_FINANCE",
+          cost: 863,
+          feasible: true
+        },
+        {
+          action: "BANK_FINANCE",
+          cost: 1479,
+          feasible: true
+        },
+        {
+          action: "DELAY",
+          cost: 0,
+          feasible: false,
+          reason: "Delay not permitted"
+        }
       ]
     }
   ]
@@ -170,10 +216,19 @@ export const shockDecisionPlan: DecisionPlan = {
       cost: 1973,
       execution_day: 2,
       binding_constraint: "BANK_LIMIT",
-      reason: "Retains bank financing to secure 3% early discount",
+      reason:
+        "Retains bank financing to secure 3% early discount",
       alternatives: [
-        { action: "PAY_NOW", cost: 0, feasible: true },
-        { action: "BANK_FINANCE", cost: 1973, feasible: true }
+        {
+          action: "PAY_NOW",
+          cost: 0,
+          feasible: true
+        },
+        {
+          action: "BANK_FINANCE",
+          cost: 1973,
+          feasible: true
+        }
       ]
     },
     {
@@ -182,11 +237,26 @@ export const shockDecisionPlan: DecisionPlan = {
       cost: 2959,
       execution_day: 7,
       binding_constraint: "LIQUIDITY_BUFFER",
-      reason: "Switched from DELAY to BANK_FINANCE because AR-Y delay to Day 20 renders DELAY infeasible against conservative liquidity buffer at Day 12",
+      reason:
+        "Switched from DELAY to BANK_FINANCE because AR-Y delay to Day 20 renders DELAY infeasible against conservative liquidity buffer at Day 12",
       alternatives: [
-        { action: "BANK_FINANCE", cost: 2959, feasible: true },
-        { action: "DELAY", cost: 2400, feasible: false, reason: "Buffer shortfall ₹2,00,000 at Day 12" },
-        { action: "PAY_MATURITY", cost: 0, feasible: false, reason: "Buffer shortfall at Day 7" }
+        {
+          action: "BANK_FINANCE",
+          cost: 2959,
+          feasible: true
+        },
+        {
+          action: "DELAY",
+          cost: 2400,
+          feasible: false,
+          reason: "Buffer shortfall ₹2,00,000 at Day 12"
+        },
+        {
+          action: "PAY_MATURITY",
+          cost: 0,
+          feasible: false,
+          reason: "Buffer shortfall at Day 7"
+        }
       ]
     },
     {
@@ -195,10 +265,19 @@ export const shockDecisionPlan: DecisionPlan = {
       cost: 863,
       execution_day: 10,
       binding_constraint: "SUPPLIER_LIMIT",
-      reason: "Supplier financing remains optimal and isolated from bank facility",
+      reason:
+        "Supplier financing remains optimal and isolated from bank facility",
       alternatives: [
-        { action: "SUPPLIER_FINANCE", cost: 863, feasible: true },
-        { action: "BANK_FINANCE", cost: 1479, feasible: true }
+        {
+          action: "SUPPLIER_FINANCE",
+          cost: 863,
+          feasible: true
+        },
+        {
+          action: "BANK_FINANCE",
+          cost: 1479,
+          feasible: true
+        }
       ]
     }
   ]
@@ -207,53 +286,140 @@ export const shockDecisionPlan: DecisionPlan = {
 export const mockHistoryEntries: HistoryEntry[] = [
   {
     id: "hist-001",
-    timestamp: "Today, 09:42 AM",
-    event_type: "RECEIVABLE_DELAY",
-    description: "Customer Beta payment delayed to Day 20",
-    total_cost: 5795,
-    cost_delta: 559,
-    decisions: shockDecisionPlan.decisions
+    timestamp: "Today, 10:00 AM",
+    event_type: "INITIAL_OPTIMIZE",
+    description: "Initial portfolio baseline joint optimization",
+    total_cost: 5236,
+    decisions: baselineDecisionPlan.decisions
   },
   {
     id: "hist-002",
-    timestamp: "Today, 08:15 AM",
-    event_type: "RATE_ARBITRAGE",
-    description: "Rate Arbitrage scheduled portfolio check",
-    total_cost: 5236,
-    decisions: baselineDecisionPlan.decisions
+    timestamp: "Today, 10:42 AM",
+    event_type: "RECEIVABLE_DELAY",
+    description: "AR-Y delayed to Day 20 (Beta ₹3,00,000)",
+    total_cost: 5795,
+    cost_delta: 559,
+    decisions: shockDecisionPlan.decisions
   }
 ];
 
-export const mockCounterfactuals: Record<string, CounterfactualResponse> = {
+export const mockCounterfactuals: Record<
+  string,
+  CounterfactualResponse
+> = {
   "INV-A": {
     invoice_id: "INV-A",
     parameter_name: "Discount Rate (%)",
     points: [
-      { parameter_value: 1.0, optimal_action: "PAY_MATURITY", cost: 6000, feasible: true },
-      { parameter_value: 2.0, optimal_action: "BANK_FINANCE", cost: 3973, feasible: true },
-      { parameter_value: 3.0, optimal_action: "BANK_FINANCE", cost: 1973, feasible: true, reason: "Baseline discount point" },
-      { parameter_value: 4.0, optimal_action: "BANK_FINANCE", cost: -27, feasible: true },
-      { parameter_value: 5.0, optimal_action: "BANK_FINANCE", cost: -2027, feasible: true }
+      {
+        parameter_value: 1.0,
+        optimal_action: "PAY_MATURITY",
+        cost: 6000,
+        feasible: true
+      },
+      {
+        parameter_value: 2.0,
+        optimal_action: "BANK_FINANCE",
+        cost: 3973,
+        feasible: true
+      },
+      {
+        parameter_value: 3.0,
+        optimal_action: "BANK_FINANCE",
+        cost: 1973,
+        feasible: true,
+        reason: "Baseline discount point"
+      },
+      {
+        parameter_value: 4.0,
+        optimal_action: "BANK_FINANCE",
+        cost: -27,
+        feasible: true
+      },
+      {
+        parameter_value: 5.0,
+        optimal_action: "BANK_FINANCE",
+        cost: -2027,
+        feasible: true
+      }
     ]
   },
+
   "INV-B": {
     invoice_id: "INV-B",
     parameter_name: "AR-Y Delay Days",
     points: [
-      { parameter_value: 0, optimal_action: "DELAY", cost: 2400, feasible: true, reason: "Baseline optimal" },
-      { parameter_value: 5, optimal_action: "DELAY", cost: 2400, feasible: true },
-      { parameter_value: 12, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true, reason: "Buffer threshold breached on Day 12" },
-      { parameter_value: 20, optimal_action: "BANK_FINANCE", cost: 2959, feasible: true }
+      {
+        parameter_value: 0,
+        optimal_action: "DELAY",
+        cost: 2400,
+        feasible: true,
+        reason: "Baseline optimal"
+      },
+      {
+        parameter_value: 5,
+        optimal_action: "DELAY",
+        cost: 2400,
+        feasible: true
+      },
+      {
+        parameter_value: 10,
+        optimal_action: "DELAY",
+        cost: 2400,
+        feasible: true
+      },
+      {
+        parameter_value: 12,
+        optimal_action: "BANK_FINANCE",
+        cost: 2959,
+        feasible: true,
+        reason: "Buffer threshold breached on Day 12"
+      },
+      {
+        parameter_value: 15,
+        optimal_action: "BANK_FINANCE",
+        cost: 2959,
+        feasible: true
+      },
+      {
+        parameter_value: 20,
+        optimal_action: "BANK_FINANCE",
+        cost: 2959,
+        feasible: true
+      }
     ]
   },
+
   "INV-C": {
     invoice_id: "INV-C",
     parameter_name: "Supplier Financing Rate (%)",
     points: [
-      { parameter_value: 5.0, optimal_action: "SUPPLIER_FINANCE", cost: 616, feasible: true },
-      { parameter_value: 7.0, optimal_action: "SUPPLIER_FINANCE", cost: 863, feasible: true, reason: "Baseline rate" },
-      { parameter_value: 10.0, optimal_action: "SUPPLIER_FINANCE", cost: 1233, feasible: true },
-      { parameter_value: 13.0, optimal_action: "BANK_FINANCE", cost: 1479, feasible: true, reason: "Bank facility becomes cheaper" }
+      {
+        parameter_value: 5.0,
+        optimal_action: "SUPPLIER_FINANCE",
+        cost: 616,
+        feasible: true
+      },
+      {
+        parameter_value: 7.0,
+        optimal_action: "SUPPLIER_FINANCE",
+        cost: 863,
+        feasible: true,
+        reason: "Baseline rate"
+      },
+      {
+        parameter_value: 10.0,
+        optimal_action: "SUPPLIER_FINANCE",
+        cost: 1233,
+        feasible: true
+      },
+      {
+        parameter_value: 13.0,
+        optimal_action: "BANK_FINANCE",
+        cost: 1479,
+        feasible: true,
+        reason: "Bank facility becomes cheaper"
+      }
     ]
   }
 };
