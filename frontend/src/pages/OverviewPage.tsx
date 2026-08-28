@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BusinessState, DecisionPlan, Decision } from '../types';
-import { formatRupees, formatPercent } from '../utils/formatters';
+import { formatRupees, formatPercent, getActionLabel } from '../utils/formatters';
 import { 
   Wallet, 
   ShieldCheck, 
@@ -207,7 +207,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                           ? 'bg-[#E0F3EA] text-[#0F2E22]'
                           : 'bg-[#E0F3EA] text-[#0F2E22]'
                       }`}>
-                        {action}
+                        {getActionLabel(action)}
                       </span>
 
                       <span className="text-base font-extrabold text-[#0F2E22] font-mono">

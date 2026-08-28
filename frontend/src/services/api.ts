@@ -5,7 +5,8 @@ import {
   EventResponse, 
   HistoryEntry, 
   CounterfactualResponse,
-  ApiErrorResponse 
+  ApiErrorResponse,
+  VoiceExplanationResponse
 } from '../types';
 
 export class ApiError extends Error {
@@ -136,6 +137,14 @@ class ApiService {
    */
   async getCounterfactual(id: string): Promise<CounterfactualResponse> {
     return this.request<CounterfactualResponse>(`/decision/${id}/counterfactual`);
+  }
+
+  /** Request optional narrated decision context from the backend. */
+  async explainVoice(invoiceId: string): Promise<VoiceExplanationResponse> {
+    return this.request<VoiceExplanationResponse>('/explain/voice', {
+      method: 'POST',
+      body: JSON.stringify({ invoice_id: invoiceId }),
+    });
   }
 }
 

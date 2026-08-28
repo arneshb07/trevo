@@ -9,19 +9,29 @@ import {
   FlaskConical,
   ChevronDown,
   ChevronUp,
+  Building2,
+  Landmark,
+  CalendarClock,
 } from 'lucide-react';
-import { SummaryMetricsViewModel, InvoiceViewModel } from '../../types';
+import { BusinessState, SummaryMetricsViewModel, InvoiceViewModel } from '../../types';
+import { formatPercent, formatRupees, getActionLabel, formatEngineTerm } from '../../utils/formatters';
 
 interface OverviewScreenProps {
   metrics: SummaryMetricsViewModel;
   invoices: InvoiceViewModel[];
+  businessState: BusinessState;
   onRunSimulation: (day: number) => void;
+  isSimulationLoading: boolean;
+  simulationError?: string;
 }
 
 export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   metrics,
   invoices,
+  businessState,
   onRunSimulation,
+  isSimulationLoading,
+  simulationError,
 }) => {
   const [activeSegment, setActiveSegment] = useState<'payables' | 'receivables' | 'financing'>('payables');
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>('inv-b');
@@ -35,7 +45,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
     setSimulationDay(9);
   };
 
-  const getActionBadgeClass = (action: string) => {
+  const getActionBadgeClass = (action: string | undefined) => {
     if (action === 'DELAY') return 'badge-warning';
     return 'badge-safe';
   };
@@ -60,6 +70,11 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             <span className="metric-label">Protected Liquidity</span>
           </div>
           <div className="metric-value">{metrics.protectedLiquidityFormatted}</div>
+          <div className="metric-note">
+            {businessState.buffer_12days
+              ? `${businessState.buffer_12days.status || 'Status unavailable'}${businessState.buffer_12days.horizon_days !== undefined ? ` · ${businessState.buffer_12days.horizon_days}-day horizon` : ''}`
+              : 'Buffer horizon status unavailable'}
+          </div>
         </div>
 
         {/* Risk Status */}
@@ -69,7 +84,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             <span className="metric-label">Risk Status</span>
           </div>
           <div>
-            <span className="badge badge-safe">
+            <span className={`badge ${metrics.riskStatus === 'Not available' ? 'badge-neutral' : 'badge-safe'}`}>
               <span className="badge-dot"></span>
               {metrics.riskStatus}
             </span>
@@ -112,8 +127,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           </div>
         </div>
 
-        {/* Invoice List */}
-        <div className="invoice-table">
+        {activeSegment === 'payables' && <div className="invoice-table">
           {invoices.map((inv) => {
             const isExpanded = expandedInvoiceId === inv.id;
             return (
@@ -137,7 +151,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
 
                   <div className="invoice-row-right">
                     <span className={`badge ${getActionBadgeClass(inv.actionAssigned)}`}>
-                      {inv.actionAssigned}
+                      {getActionLabel(inv.actionAssigned)}
                     </span>
                     <div className="invoice-amount">{inv.amountFormatted}</div>
                     <div style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }}>
@@ -166,6 +180,18 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                         <div className="expanded-item-label">Strategy Route</div>
                         <div className="expanded-item-value">{inv.details.financingCost || 'Direct Cash'}</div>
                       </div>
+                      <div>
+                        <div className="expanded-item-label">Decision cost</div>
+                        <div className="expanded-item-value">{inv.details.cost !== undefined ? formatRupees(inv.details.cost) : 'Not available'}</div>
+                      </div>
+                      <div>
+                        <div className="expanded-item-label">Repayment</div>
+                        <div className="expanded-item-value">{inv.details.repaymentAmount !== undefined ? `${formatRupees(inv.details.repaymentAmount)}${inv.details.repaymentDay !== undefined ? ` on Day ${inv.details.repaymentDay}` : ''}` : 'Not available'}</div>
+                      </div>
+                      <div>
+                        <div className="expanded-item-label">Constraint</div>
+                        <div className="expanded-item-value">{formatEngineTerm(inv.details.bindingConstraint)}</div>
+                      </div>
                     </div>
                     {inv.details.recommendedActionNote && (
                       <div
@@ -182,12 +208,43 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                         {inv.details.recommendedActionNote}
                       </div>
                     )}
+                    {inv.details.alternatives && inv.details.alternatives.length > 0 && (
+                      <div className="alternatives-list">
+                        <div className="expanded-item-label">Alternatives considered</div>
+                        {inv.details.alternatives.map((alternative) => (
+                          <div className="alternative-row" key={alternative.action}>
+                            <span>{getActionLabel(alternative.action)}</span>
+                            <span>{formatRupees(alternative.cost)}</span>
+                            <span className={alternative.feasible ? 'alternative-feasible' : 'alternative-infeasible'}>{alternative.feasible ? 'Feasible' : alternative.reason || 'Not feasible'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </React.Fragment>
             );
           })}
-        </div>
+        </div>}
+
+        {activeSegment === 'receivables' && <div className="position-list">
+          {businessState.receivables.map((receivable) => (
+            <div className="position-row" key={receivable.id}>
+              <div><strong>{receivable.id}</strong><span>{receivable.customer || 'Customer'} · {formatPercent(receivable.p_ontime)} on-time confidence</span></div>
+              <div className="position-value"><strong>{formatRupees(receivable.amount)}</strong><span>Expected Day {receivable.expected_day} · Late Day {receivable.late_day}</span></div>
+            </div>
+          ))}
+        </div>}
+
+        {activeSegment === 'financing' && <div className="position-list">
+          {businessState.financing.map((facility) => {
+            return <div className="position-row" key={facility.id}>
+              <div><strong>{facility.provider}</strong><span>{facility.type === 'BANK' ? <Landmark size={13} /> : <Building2 size={13} />} {formatPercent(facility.rate)} annual rate</span></div>
+              <div className="position-value"><strong>{formatRupees(facility.limit)} limit</strong><span>Utilization not available from current API</span></div>
+            </div>;
+          })}
+          {businessState.obligations.map((obligation) => <div className="position-row" key={obligation.id}><div><strong>{obligation.name}</strong><span><CalendarClock size={13} /> Mandatory Day {obligation.day}</span></div><div className="position-value"><strong>{formatRupees(obligation.amount)}</strong><span>Fixed outflow</span></div></div>)}
+        </div>}
       </div>
 
       {/* Simulate Event Card */}
@@ -238,10 +295,12 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                 type="button"
                 className="btn-primary"
                 onClick={() => onRunSimulation(simulationDay)}
+                disabled={isSimulationLoading}
               >
-                Run Simulation
+                {isSimulationLoading ? 'Reassessing...' : 'Run Simulation'}
               </button>
             </div>
+            {simulationError && <p className="simulation-error">{simulationError}</p>}
           </div>
         </div>
       </div>

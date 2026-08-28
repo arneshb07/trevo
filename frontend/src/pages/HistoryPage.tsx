@@ -1,6 +1,7 @@
 import React from 'react';
 import { HistoryEntry } from '../types';
 import { RotateCw, TrendingUp, Landmark, ArrowRight } from 'lucide-react';
+import { getActionLabel } from '../utils/formatters';
 
 interface HistoryPageProps {
   history: HistoryEntry[];
@@ -69,7 +70,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = () => {
                     <span className="font-bold text-[#0F2E22] flex items-center gap-1 font-mono">
                       <span className="line-through text-[#5A7568]">DELAY</span>
                       <ArrowRight className="w-3 h-3 text-[#2D9A65]" />
-                      <span className="text-[#2D9A65]">BANK_FINANCE</span>
+                      <span className="text-[#2D9A65]">{getActionLabel('BANK_FINANCE')}</span>
                     </span>
                   </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BusinessState, DecisionPlan, Decision } from '../types';
-import { formatRupees } from '../utils/formatters';
+import { formatRupees, getActionLabel } from '../utils/formatters';
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -96,7 +96,7 @@ export const DecisionsPage: React.FC<DecisionsPageProps> = ({
                   New Optimal Plan
                 </div>
                 <div className="text-lg font-extrabold text-[#0F2E22] mt-0.5 font-mono">
-                  {isShockActive ? 'BANK_FINANCE' : 'DELAY'}
+                  {getActionLabel(isShockActive ? 'BANK_FINANCE' : 'DELAY')}
                 </div>
               </div>
             </div>
@@ -167,7 +167,7 @@ export const DecisionsPage: React.FC<DecisionsPageProps> = ({
               <div className="text-xs leading-relaxed">
                 <div className="font-extrabold text-[#0F2E22]">4. Re-optimization</div>
                 <div className="text-[#5A7568] mt-0.5">
-                  Switched INV B strategy to BANK_FINANCE to bridge the gap.
+                  Switched INV B strategy to {getActionLabel('BANK_FINANCE')} to bridge the gap.
                 </div>
               </div>
             </div>

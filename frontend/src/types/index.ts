@@ -54,6 +54,24 @@ export interface BusinessState {
   receivables: Receivable[];
   obligations: Obligation[];
   financing: FinancingFacility[];
+  expected_cash_trace?: CashTracePoint[];
+  conservative_cash_trace?: CashTracePoint[];
+  expected_cash_flow_trace?: CashTracePoint[];
+  conservative_cash_flow_trace?: CashTracePoint[];
+  buffer_12days?: BufferStatus;
+}
+
+export interface CashTracePoint {
+  day: number;
+  cash: number;
+}
+
+export interface BufferStatus {
+  value?: number;
+  horizon_days?: number;
+  breach_day?: number;
+  minimum_projected_cash?: number;
+  status?: string;
 }
 
 export interface DecisionAlternative {
@@ -71,6 +89,13 @@ export interface Decision {
   binding_constraint?: string;
   alternatives?: DecisionAlternative[];
   reason?: string;
+  immediate_outflow?: number;
+  repayment_amount?: number;
+  repayment_day?: number;
+  cash_before?: number;
+  cash_after?: number;
+  required_buffer?: number;
+  reason_codes?: string[];
 }
 
 export interface DecisionPlan {
@@ -132,6 +157,11 @@ export interface ApiErrorResponse {
   status_code?: number;
 }
 
+export interface VoiceExplanationResponse {
+  audio: string | null;
+  text: string;
+}
+
 // UI Navigation & View Specific Types
 
 export type NavigationTab = 'overview' | 'decisions' | 'history';
@@ -143,7 +173,7 @@ export interface InvoiceViewModel {
   dueInDays?: number;
   amount: number;
   amountFormatted: string;
-  actionAssigned: ActionType;
+  actionAssigned?: ActionType;
   status: 'SCHEDULED' | 'PROCESSING' | 'OVERDUE' | 'COMPLETED' | 'OPTIMIZED';
   statusText?: string;
   isOverdue?: boolean;
@@ -156,6 +186,15 @@ export interface InvoiceViewModel {
     financingCost?: string;
     effectiveApr?: string;
     recommendedActionNote?: string;
+    cost?: number;
+    immediateOutflow?: number;
+    repaymentAmount?: number;
+    repaymentDay?: number;
+    cashBefore?: number;
+    cashAfter?: number;
+    requiredBuffer?: number;
+    bindingConstraint?: string;
+    alternatives?: DecisionAlternative[];
   };
 }
 
@@ -164,7 +203,7 @@ export interface SummaryMetricsViewModel {
   availableCashFormatted: string;
   protectedLiquidity: number;
   protectedLiquidityFormatted: string;
-  riskStatus: 'SAFE' | 'AT_RISK' | 'CRITICAL';
+  riskStatus: string;
   optimizationCost: number;
   optimizationCostFormatted: string;
 }
@@ -180,8 +219,9 @@ export interface DecisionReasoningStep {
 export interface ForecastMilestone {
   day: number;
   dayLabel: string;
-  expectedAmount: number;
-  bufferAmount: number;
+  expectedAmount?: number;
+  bufferAmount?: number;
+  conservativeAmount?: number;
   isHighlighted?: boolean;
   highlightLabel?: string;
 }
@@ -201,9 +241,12 @@ export interface DecisionUpdateViewModel {
   costDelta: string;
   costDeltaRaw: number;
   costDeltaDirection: 'up' | 'down';
+  previousCost: number;
+  newCost: number;
   reasoningSteps: DecisionReasoningStep[];
   forecastMilestones: ForecastMilestone[];
   actionPlanInvoices: InvoiceViewModel[];
+  liquidityBuffer?: number;
 }
 
 export interface HistoryViewModel {

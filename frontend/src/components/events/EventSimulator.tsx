@@ -1,5 +1,6 @@
 import React from 'react';
 import { Zap, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
+import { getActionLabel } from '../../utils/formatters';
 
 interface EventSimulatorProps {
   onSimulateShock: () => void;
@@ -54,7 +55,7 @@ export const EventSimulator: React.FC<EventSimulatorProps> = ({
           </p>
           <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
             <span className="text-slate-300">Expected change:</span>
-            <span className="font-mono text-amber-300">INV-B: DELAY → BANK_FINANCE</span>
+            <span className="font-mono text-amber-300">INV-B: {getActionLabel('DELAY')} → {getActionLabel('BANK_FINANCE')}</span>
           </div>
         </div>
 

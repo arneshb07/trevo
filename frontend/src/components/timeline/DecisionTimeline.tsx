@@ -1,4 +1,5 @@
 import React from 'react';
+import { getActionLabel } from '../../utils/formatters';
 import { Activity, CheckCircle2 } from 'lucide-react';
 
 export interface TimelineMilestone {
@@ -38,7 +39,7 @@ export const DecisionTimeline: React.FC<DecisionTimelineProps> = ({
       label: 'Strategy Re-optimization',
       time: '10:42:17 AM',
       status: 'completed',
-      detail: 'Optimal solution computed: Switch INV B to BANK_FINANCE',
+      detail: `Optimal solution computed: Switch INV B to ${getActionLabel('BANK_FINANCE')}`,
     },
     {
       id: '4',

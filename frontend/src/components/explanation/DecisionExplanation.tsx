@@ -8,6 +8,7 @@ import {
   Check,
 } from 'lucide-react';
 import { DecisionReasoningStep } from '../../types';
+import { getActionLabel } from '../../utils/formatters';
 
 interface DecisionExplanationProps {
   title?: string;
@@ -43,7 +44,7 @@ export const DecisionExplanation: React.FC<DecisionExplanationProps> = ({
     {
       stepNumber: 4,
       title: '4. Re-optimization',
-      description: 'Switched INV B strategy to BANK_FINANCE to bridge the gap.',
+      description: `Switched INV B strategy to ${getActionLabel('BANK_FINANCE')} to bridge the gap.`,
       type: 'reopt',
       iconType: 'refresh',
     },

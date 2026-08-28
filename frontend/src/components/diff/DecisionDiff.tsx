@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowDown, ArrowRightLeft } from 'lucide-react';
 import { ActionType } from '../../types';
+import { formatRupees, getActionLabel } from '../../utils/formatters';
 
 interface DecisionDiffProps {
   previousTarget?: string;
@@ -8,14 +9,18 @@ interface DecisionDiffProps {
   newTarget?: string;
   newAction?: ActionType | string;
   costDelta?: string;
+  previousCost?: number;
+  newCost?: number;
   costDeltaLabel?: string;
 }
 
 export const DecisionDiff: React.FC<DecisionDiffProps> = ({
-  previousTarget = 'INV B',
-  previousAction = 'DELAY',
-  newAction = 'BANK_FINANCE',
-  costDelta = '+₹559~',
+  previousTarget,
+  previousAction,
+  newAction,
+  costDelta,
+  previousCost,
+  newCost,
   costDeltaLabel = 'COST DELTA',
 }) => {
   return (
@@ -26,8 +31,8 @@ export const DecisionDiff: React.FC<DecisionDiffProps> = ({
       </div>
 
       <div className="shift-plan-box">
-        <div className="shift-plan-label">PREVIOUS PLAN ({previousTarget})</div>
-        <div className="shift-plan-value">{previousAction}</div>
+        <div className="shift-plan-label">PREVIOUS PLAN {previousTarget ? `(${previousTarget})` : ''}</div>
+        <div className="shift-plan-value">{getActionLabel(previousAction)}</div>
       </div>
 
       <div className="shift-arrow-divider">
@@ -38,12 +43,13 @@ export const DecisionDiff: React.FC<DecisionDiffProps> = ({
 
       <div className="shift-plan-box optimal">
         <div className="shift-plan-label">NEW OPTIMAL PLAN</div>
-        <div className="shift-plan-value">{newAction}</div>
+        <div className="shift-plan-value">{getActionLabel(newAction)}</div>
       </div>
 
       <div className="cost-delta-footer">
+        {previousCost !== undefined && newCost !== undefined && <div className="cost-comparison">{formatRupees(previousCost)} <span>→</span> {formatRupees(newCost)}</div>}
         <div className="cost-delta-label">{costDeltaLabel}</div>
-        <div className="cost-delta-value">{costDelta}</div>
+        <div className="cost-delta-value">{costDelta || 'Not available'}</div>
       </div>
     </div>
   );
